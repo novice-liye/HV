@@ -114,13 +114,13 @@ export function AISearchDemo() {
       })),
     ];
 
+    let fullContent = '';
+    let fullReasoning = '';
+    let assistantMsg: ChatMessage | null = null;
+
     try {
       const abort = new AbortController();
       abortRef.current = abort;
-
-      let fullContent = '';
-      let fullReasoning = '';
-      let assistantMsg: ChatMessage | null = null;
 
       const body: any = {
         model: 'deepseek-chat',

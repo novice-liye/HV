@@ -6,7 +6,7 @@ import { mapLocations } from '../data/locations';
 
 export function buildSystemPrompt(): string {
   // 压缩势力数据
-  const factionInfo = factions.map(f => `${f.name}(${f.id}): ${f.description}`).join('\n');
+  const factionInfo = Object.values(factions).map(f => `${f.name}(${f.id}): ${f.description}`).join('\n');
 
   // 压缩人物数据 - 只保留关键信息
   const personInfo = persons.map(p => {

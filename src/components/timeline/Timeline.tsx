@@ -33,7 +33,6 @@ export const Timeline: React.FC = () => {
     clearFilters,
     filteredEvents,
     yearToX,
-    xToYear,
     handleWheel,
     handleTracksWheel,
     handleMouseDown,

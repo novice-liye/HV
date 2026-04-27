@@ -262,7 +262,7 @@ export const RelationGraphDemo: React.FC = () => {
         if (path) {
           const names = path.map(p => {
             const n = relationNodes.find(rn => rn.id === p.nodeId);
-            return n?.name || p.nodeId;
+            return n?.label || p.nodeId;
           }).join(' → ');
           setPathMessage(`路径（${path.length - 1} 步）：${names}`);
           highlightPath(path);
