@@ -89,7 +89,16 @@ export const RelationGraphDemo: React.FC = () => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [showDetail, setShowDetail] = useState(false); // 详情面板显隐
+  const [pathSearchA, setPathSearchA] = useState(''); // 路径搜索：人物A
+  const [pathSearchB, setPathSearchB] = useState(''); // 路径搜索：人物B
+  const [pathSearchResultsA, setPathSearchResultsA] = useState<Array<{id: string; name: string; faction?: FactionId}>>([]);
+  const [pathSearchResultsB, setPathSearchResultsB] = useState<Array<{id: string; name: string; faction?: FactionId}>>([]);
+  const [showPathResultsA, setShowPathResultsA] = useState(false);
+  const [showPathResultsB, setShowPathResultsB] = useState(false);
+  const [pathResult, setPathResult] = useState<Array<{nodeId: string; edgeIndex: number}> | null>(null); // BFS 路径结果
+  const [pathMessage, setPathMessage] = useState(''); // 路径搜索提示信息
   const animRef = useRef<number>(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false); // IME 组合状态
   const dragRef = useRef<{ nodeId: string | null; startX: number; startY: number; moved: boolean }>({
     nodeId: null, startX: 0, startY: 0, moved: false,
@@ -143,6 +152,159 @@ export const RelationGraphDemo: React.FC = () => {
     // Reset pan and zoom for clean view
     setPan({ x: 0, y: 0 });
     setZoom(1);
+  }, []);
+
+  // BFS 寻路：找到两个节点之间的最短路径
+  const findPath = useCallback((startId: string, endId: string): Array<{nodeId: string; edgeIndex: number}> | null => {
+    // 构建邻接表
+    const adj: Record<string, Array<{neighborId: string; edgeIndex: number}>> = {};
+    for (const n of relationNodes) adj[n.id] = [];
+    relationEdges.forEach((e, idx) => {
+      adj[e.source]?.push({ neighborId: e.target, edgeIndex: idx });
+      adj[e.target]?.push({ neighborId: e.source, edgeIndex: idx });
+    });
+
+    // BFS
+    const visited = new Set<string>();
+    const queue: Array<{nodeId: string; path: Array<{nodeId: string; edgeIndex: number}>}> = [{ nodeId: startId, path: [{ nodeId: startId, edgeIndex: -1 }] }];
+    visited.add(startId);
+
+    while (queue.length > 0) {
+      const { nodeId, path } = queue.shift()!;
+      if (nodeId === endId) return path;
+      for (const { neighborId, edgeIndex } of (adj[nodeId] || [])) {
+        if (!visited.has(neighborId)) {
+          visited.add(neighborId);
+          queue.push({ nodeId: neighborId, path: [...path, { nodeId: neighborId, edgeIndex }] });
+        }
+      }
+    }
+    return null; // 无路径
+  }, []);
+
+  // 高亮路径
+  const highlightPath = useCallback((path: Array<{nodeId: string; edgeIndex: number}> | null) => {
+    setPathResult(path);
+    setSelectedNode(null);
+    setShowDetail(false);
+    nodesRef.current.forEach(n => {
+      n.isFocused = false;
+      n.isHighlighted = false;
+    });
+    edgesRef.current.forEach(e => {
+      e.highlighted = false;
+    });
+    if (!path) return;
+    const pathNodeIds = new Set(path.map(p => p.nodeId));
+    const pathEdgeIndices = new Set(path.filter(p => p.edgeIndex >= 0).map(p => p.edgeIndex));
+    nodesRef.current.forEach(n => {
+      n.isHighlighted = pathNodeIds.has(n.id);
+    });
+    edgesRef.current.forEach((e, idx) => {
+      e.highlighted = pathEdgeIndices.has(idx);
+    });
+  }, []);
+
+  // 路径搜索：查找人物
+  const handlePathSearch = useCallback((query: string, target: 'A' | 'B') => {
+    if (target === 'A') {
+      setPathSearchA(query);
+      if (isComposingRef.current) return;
+    } else {
+      setPathSearchB(query);
+      if (isComposingRef.current) return;
+    }
+    if (query.trim().length === 0) {
+      if (target === 'A') { setPathSearchResultsA([]); setShowPathResultsA(false); }
+      else { setPathSearchResultsB([]); setShowPathResultsB(false); }
+      return;
+    }
+    const q = query.trim().toLowerCase();
+    const results = persons
+      .filter(p => {
+        if (p.name.toLowerCase().includes(q)) return true;
+        if (p.title && p.title.toLowerCase().includes(q)) return true;
+        const py = getPersonPinyin(p.name);
+        if (py.full && py.full.includes(q)) return true;
+        if (py.abbr && py.abbr.includes(q)) return true;
+        return false;
+      })
+      .slice(0, 6)
+      .map(p => ({ id: p.id, name: p.name, faction: p.faction }));
+    if (target === 'A') { setPathSearchResultsA(results); setShowPathResultsA(results.length > 0); }
+    else { setPathSearchResultsB(results); setShowPathResultsB(results.length > 0); }
+  }, []);
+
+  // 选择路径搜索结果
+  const selectPathPerson = useCallback((personId: string, target: 'A' | 'B') => {
+    const person = persons.find(p => p.id === personId);
+    if (!person) return;
+    if (target === 'A') {
+      setPathSearchA(person.name);
+      setShowPathResultsA(false);
+    } else {
+      setPathSearchB(person.name);
+      setShowPathResultsB(false);
+    }
+    // 如果 A 和 B 都已选择，自动寻路
+    const otherQuery = target === 'A' ? pathSearchB : pathSearchA;
+    if (otherQuery.trim()) {
+      const otherPerson = persons.find(p => p.name === otherQuery.trim());
+      if (otherPerson) {
+        const startId = target === 'A' ? personId : otherPerson.id;
+        const endId = target === 'A' ? otherPerson.id : personId;
+        if (startId === endId) {
+          setPathMessage('请选择两个不同的人物');
+          highlightPath(null);
+          return;
+        }
+        const path = findPath(startId, endId);
+        if (path) {
+          const names = path.map(p => {
+            const n = relationNodes.find(rn => rn.id === p.nodeId);
+            return n?.name || p.nodeId;
+          }).join(' → ');
+          setPathMessage(`路径（${path.length - 1} 步）：${names}`);
+          highlightPath(path);
+        } else {
+          setPathMessage('未找到连接路径');
+          highlightPath(null);
+        }
+      }
+    }
+  }, [pathSearchB, findPath, highlightPath]);
+
+  // 清除路径搜索
+  const clearPathSearch = useCallback(() => {
+    setPathSearchA('');
+    setPathSearchB('');
+    setPathSearchResultsA([]);
+    setPathSearchResultsB([]);
+    setShowPathResultsA(false);
+    setShowPathResultsB(false);
+    setPathResult(null);
+    setPathMessage('');
+    nodesRef.current.forEach(n => { n.isFocused = false; n.isHighlighted = false; });
+    edgesRef.current.forEach(e => { e.highlighted = false; });
+  }, []);
+
+  // 全屏切换
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const toggleFullscreen = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  // 监听全屏变化事件（用户按 Esc 退出时同步状态）
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
   // 根据筛选条件过滤可见节点
@@ -604,93 +766,170 @@ export const RelationGraphDemo: React.FC = () => {
   const hoveredPerson = hoveredNode ? persons.find(p => p.id === hoveredNode) : null;
 
   return (
-    <div className="relation-graph-demo">
-      <div className="relation-graph-demo__header">
+    <div ref={containerRef} className="relation-graph-demo">
+      {/* 顶部工具栏：标题 + 搜索 + 筛选 */}
+      <div className="relation-graph-demo__toolbar">
         <h2 className="relation-graph-demo__title">🕸️ 人物关系图</h2>
-        <p className="relation-graph-demo__subtitle">
+        <span className="relation-graph-demo__stats-inline">
           {selectedNode
             ? `${selectedPerson?.name || selectedFaction?.name || selectedNode} · ${selectedNodeRelations.length} 条关系`
-            : `${relationNodes.length} 个节点 · ${relationEdges.length} 条关系 · 点击节点聚焦 · 拖拽移动`}
-        </p>
-      {/* 搜索框 */}
-      <div className="relation-graph-demo__search" style={{ position: 'relative', display: 'inline-block', marginLeft: '16px' }}>
-        <input
-          type="text"
-          placeholder="🔍 搜索人物..."
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          onCompositionStart={() => { isComposingRef.current = true; }}
-          onCompositionEnd={(e) => { isComposingRef.current = false; handleSearch((e.target as HTMLInputElement).value); }}
-          onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
-          onBlur={() => setTimeout(() => setShowSearchResults(false), 300)}
-          style={{
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(201,169,110,0.2)',
-            borderRadius: '6px',
-            padding: '5px 12px',
-            color: '#e8e0d0',
-            fontSize: '13px',
-            width: '180px',
-            outline: 'none',
-          }}
-        />
-        {showSearchResults && (
-          <div style={{
-            position: 'absolute', top: '100%', left: 0, right: 0,
-            background: 'rgba(13,17,23,0.95)', border: '1px solid rgba(201,169,110,0.3)',
-            borderRadius: '6px', marginTop: '4px', zIndex: 100, maxHeight: '240px', overflowY: 'auto',
-          }}>
-            {searchResults.map(r => (
-              <div
-                key={r.id}
-                style={{
-                  padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
-                  borderBottom: '1px solid rgba(255,255,255,0.05)',
-                }}
-                onMouseDown={() => focusOnNode(r.id)}
+            : `${relationNodes.length} 节点 · ${relationEdges.length} 关系`}
+        </span>
+        {/* 搜索框 */}
+        <div className="relation-graph-demo__search" style={{ position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="🔍 搜索人物..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            onCompositionStart={() => { isComposingRef.current = true; }}
+            onCompositionEnd={(e) => { isComposingRef.current = false; handleSearch((e.target as HTMLInputElement).value); }}
+            onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+            onBlur={() => setTimeout(() => setShowSearchResults(false), 300)}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(201,169,110,0.2)',
+              borderRadius: '6px',
+              padding: '4px 10px',
+              color: '#e8e0d0',
+              fontSize: '12px',
+              width: '140px',
+              outline: 'none',
+            }}
+          />
+          {showSearchResults && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0,
+              background: 'rgba(13,17,23,0.95)', border: '1px solid rgba(201,169,110,0.3)',
+              borderRadius: '6px', marginTop: '4px', zIndex: 100, maxHeight: '240px', overflowY: 'auto',
+            }}>
+              {searchResults.map(r => (
+                <div
+                  key={r.id}
+                  style={{
+                    padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  }}
+                  onMouseDown={() => focusOnNode(r.id)}
+                >
+                  <span style={{
+                    width: '6px', height: '6px', borderRadius: '50%',
+                    background: r.faction ? (factions[r.faction]?.color || '#999') : '#999',
+                  }} />
+                  <span style={{ color: '#e8e0d0', fontSize: '12px' }}>{r.name}</span>
+                  {r.faction && <span style={{ color: 'rgba(232,224,208,0.4)', fontSize: '10px', marginLeft: 'auto' }}>{factions[r.faction]?.name}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 势力筛选按钮 */}
+        <div className="relation-graph-demo__filter-inline">
+          <button
+            className={`relation-graph-demo__filter-btn ${filterFaction === 'all' ? 'relation-graph-demo__filter-btn--active' : ''}`}
+            onClick={() => setFilterFaction('all')}
+          >
+            全部
+          </button>
+          {ALL_FACTIONS.map(f => {
+            const fac = factions[f];
+            if (!fac || fac.id === 'other') return null;
+            return (
+              <button
+                key={f}
+                className={`relation-graph-demo__filter-btn ${filterFaction === f ? 'relation-graph-demo__filter-btn--active' : ''}`}
+                style={{ '--fc': fac.color, '--fb': fac.bgColor } as React.CSSProperties}
+                onClick={() => setFilterFaction(f)}
               >
-                <span style={{
-                  width: '8px', height: '8px', borderRadius: '50%',
-                  background: r.faction ? (factions[r.faction]?.color || '#999') : '#999',
-                }} />
-                <span style={{ color: '#e8e0d0', fontSize: '13px' }}>{r.name}</span>
-                {r.faction && <span style={{ color: 'rgba(232,224,208,0.4)', fontSize: '11px', marginLeft: 'auto' }}>{factions[r.faction]?.name}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                {fac.name}
+              </button>
+            );
+          })}
+          <button
+            className="relation-graph-demo__filter-btn"
+            onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); setSelectedNode(null); setShowDetail(false); nodesRef.current.forEach(n => { n.isFocused = false; n.isHighlighted = false; }); edgesRef.current.forEach(e => { e.highlighted = false; }); }}
+            title="重置视图"
+          >
+            🔄
+          </button>
+          <button
+            className="relation-graph-demo__filter-btn"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? '退出全屏' : '全屏模式'}
+            style={{ fontSize: '14px', padding: '2px 8px' }}
+          >
+            {isFullscreen ? '⛶' : '⛶'}
+          </button>
+        </div>
       </div>
 
-      {/* 势力筛选 */}
-      <div className="relation-graph-demo__filter">
-        <button
-          className={`relation-graph-demo__filter-btn ${filterFaction === 'all' ? 'relation-graph-demo__filter-btn--active' : ''}`}
-          onClick={() => setFilterFaction('all')}
-        >
-          全部
-        </button>
-        {ALL_FACTIONS.map(f => {
-          const fac = factions[f];
-          if (!fac || fac.id === 'other') return null;
-          return (
-            <button
-              key={f}
-              className={`relation-graph-demo__filter-btn ${filterFaction === f ? 'relation-graph-demo__filter-btn--active' : ''}`}
-              style={{ '--fc': fac.color, '--fb': fac.bgColor } as React.CSSProperties}
-              onClick={() => setFilterFaction(f)}
-            >
-              {fac.name}
-            </button>
-          );
-        })}
-        <button
-          className="relation-graph-demo__filter-btn"
-          onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); setSelectedNode(null); setShowDetail(false); nodesRef.current.forEach(n => { n.isFocused = false; n.isHighlighted = false; }); edgesRef.current.forEach(e => { e.highlighted = false; }); }}
-          title="重置视图"
-        >
-          🔄 重置
-        </button>
+      {/* 路径搜索栏 */}
+      <div className="relation-graph-demo__path-search">
+        <span className="relation-graph-demo__path-label">🔗 关系路径：</span>
+        <div className="relation-graph-demo__path-input" style={{ position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="人物A"
+            value={pathSearchA}
+            onChange={(e) => handlePathSearch(e.target.value, 'A')}
+            onCompositionStart={() => { isComposingRef.current = true; }}
+            onCompositionEnd={(e) => { isComposingRef.current = false; handlePathSearch((e.target as HTMLInputElement).value, 'A'); }}
+            onFocus={() => pathSearchResultsA.length > 0 && setShowPathResultsA(true)}
+            onBlur={() => setTimeout(() => setShowPathResultsA(false), 300)}
+            style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,169,110,0.2)',
+              borderRadius: '4px', padding: '3px 8px', color: '#e8e0d0', fontSize: '12px', width: '100px', outline: 'none',
+            }}
+          />
+          {showPathResultsA && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'rgba(13,17,23,0.95)', border: '1px solid rgba(201,169,110,0.3)', borderRadius: '4px', marginTop: '2px', zIndex: 100, maxHeight: '180px', overflowY: 'auto' }}>
+              {pathSearchResultsA.map(r => (
+                <div key={r.id} style={{ padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '12px' }}
+                  onMouseDown={() => selectPathPerson(r.id, 'A')}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: r.faction ? (factions[r.faction]?.color || '#999') : '#999' }} />
+                  <span style={{ color: '#e8e0d0' }}>{r.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <span style={{ color: 'var(--color-gold)', fontSize: '12px', flexShrink: 0 }}>→</span>
+        <div className="relation-graph-demo__path-input" style={{ position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="人物B"
+            value={pathSearchB}
+            onChange={(e) => handlePathSearch(e.target.value, 'B')}
+            onCompositionStart={() => { isComposingRef.current = true; }}
+            onCompositionEnd={(e) => { isComposingRef.current = false; handlePathSearch((e.target as HTMLInputElement).value, 'B'); }}
+            onFocus={() => pathSearchResultsB.length > 0 && setShowPathResultsB(true)}
+            onBlur={() => setTimeout(() => setShowPathResultsB(false), 300)}
+            style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,169,110,0.2)',
+              borderRadius: '4px', padding: '3px 8px', color: '#e8e0d0', fontSize: '12px', width: '100px', outline: 'none',
+            }}
+          />
+          {showPathResultsB && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'rgba(13,17,23,0.95)', border: '1px solid rgba(201,169,110,0.3)', borderRadius: '4px', marginTop: '2px', zIndex: 100, maxHeight: '180px', overflowY: 'auto' }}>
+              {pathSearchResultsB.map(r => (
+                <div key={r.id} style={{ padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '12px' }}
+                  onMouseDown={() => selectPathPerson(r.id, 'B')}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: r.faction ? (factions[r.faction]?.color || '#999') : '#999' }} />
+                  <span style={{ color: '#e8e0d0' }}>{r.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {pathMessage && (
+          <span className="relation-graph-demo__path-result" style={{ fontSize: '11px', color: 'var(--color-gold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+            {pathMessage}
+          </span>
+        )}
+        {(pathSearchA || pathSearchB || pathResult) && (
+          <button className="relation-graph-demo__filter-btn" onClick={clearPathSearch} style={{ fontSize: '11px', padding: '2px 8px', flexShrink: 0 }}>✕ 清除</button>
+        )}
       </div>
 
       <div className="relation-graph-demo__main">
@@ -717,178 +956,172 @@ export const RelationGraphDemo: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
 
-      {/* 选中节点提示按钮 + 详情面板 */}
-      {selectedNode && !showDetail && (
-        <div
-          style={{
-            position: 'absolute', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
-            zIndex: 20,
-          }}
-        >
-          <button
-            onClick={() => setShowDetail(true)}
+        {/* 选中节点提示按钮 */}
+        {selectedNode && !showDetail && (
+          <div
             style={{
-              background: 'rgba(201,169,110,0.15)',
-              border: '1px solid rgba(201,169,110,0.4)',
-              borderRadius: '8px',
-              padding: '8px 20px',
-              color: '#c9a96e',
-              fontSize: '14px',
-              cursor: 'pointer',
-              backdropFilter: 'blur(8px)',
-              whiteSpace: 'nowrap',
-              display: 'flex', alignItems: 'center', gap: '8px',
+              position: 'absolute', bottom: '12px', left: '50%', transform: 'translateX(-50%)',
+              zIndex: 20,
             }}
           >
-            <span style={{ fontSize: '16px' }}>📋</span>
-            查看「{selectedPerson?.name || selectedFaction?.name || selectedNode}」的详情
-            <span style={{ fontSize: '12px', opacity: 0.6 }}>点击展开</span>
-          </button>
-        </div>
-      )}
-      {selectedNode && showDetail && (
-        <div className="relation-graph-demo__detail">
-          <div className="relation-graph-demo__detail-header">
-            {selectedPerson ? (
-              <>
-                <div
-                  className="relation-graph-demo__detail-avatar"
-                  style={{ borderColor: factions[selectedPerson.faction]?.color, color: factions[selectedPerson.faction]?.color }}
-                >
-                  {selectedPerson.name.charAt(0)}
-                </div>
-                <div className="relation-graph-demo__detail-meta">
-                  <h3 className="relation-graph-demo__detail-name">{selectedPerson.name}</h3>
-                  <div className="relation-graph-demo__detail-title">{selectedPerson.title}</div>
-                  <div className="relation-graph-demo__detail-faction">{factions[selectedPerson.faction]?.name}</div>
-                  <div className="relation-graph-demo__detail-years">
-                    {selectedPerson.birthYear || '?'}—{selectedPerson.deathYear || '?'}年
-                    {selectedPerson.birthYear && selectedPerson.deathYear && (
-                      <span> · 享年{selectedPerson.deathYear - selectedPerson.birthYear}岁</span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  className="relation-graph-demo__detail-nav-btn"
-                  onClick={() => handleGoToPersonGallery(selectedPerson.id)}
-                >
-                  👤 人物图鉴
-                </button>
-              </>
-            ) : selectedFaction ? (
-              <>
-                <div
-                  className="relation-graph-demo__detail-avatar"
-                  style={{ borderColor: selectedFaction.color, color: selectedFaction.color, background: selectedFaction.bgColor }}
-                >
-                  {selectedFaction.name.charAt(0)}
-                </div>
-                <div className="relation-graph-demo__detail-meta">
-                  <h3 className="relation-graph-demo__detail-name">{selectedFaction.name}</h3>
-                  <div className="relation-graph-demo__detail-faction">势力节点</div>
-                </div>
-              </>
-            ) : null}
-            <button className="relation-graph-demo__detail-close" onClick={() => {
-              setShowDetail(false);
-            }}>✕</button>
+            <button
+              onClick={() => setShowDetail(true)}
+              style={{
+                background: 'rgba(201,169,110,0.15)',
+                border: '1px solid rgba(201,169,110,0.4)',
+                borderRadius: '8px',
+                padding: '6px 16px',
+                color: '#c9a96e',
+                fontSize: '13px',
+                cursor: 'pointer',
+                backdropFilter: 'blur(8px)',
+                whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}
+            >
+              <span style={{ fontSize: '14px' }}>📋</span>
+              查看「{selectedPerson?.name || selectedFaction?.name || selectedNode}」详情
+            </button>
           </div>
+        )}
 
-          {/* 关系列表 */}
-          {selectedNodeRelations.length > 0 && (
-            <div className="relation-graph-demo__detail-relations">
-              <div className="relation-graph-demo__section-label">人物关系</div>
-              {selectedNodeRelations.map((rel, i) => {
-                const otherId = rel.source === selectedNode ? rel.target : rel.source;
-                const otherPerson = persons.find(p => p.id === otherId);
-                const otherFaction = otherId.startsWith('f_')
-                  ? factions[otherId.replace('f_', '') as FactionId]
-                  : otherPerson ? factions[otherPerson.faction] : null;
-                const otherName = otherPerson?.name
-                  || (otherId.startsWith('f_') ? otherFaction?.name : null)
-                  || otherId;
-                return (
-                  <div key={i} className="relation-graph-demo__relation-item">
-                    <span
-                      className="relation-graph-demo__relation-type"
-                      style={{ borderColor: EDGE_COLORS[rel.type], color: EDGE_COLORS[rel.type] }}
+        {/* 详情面板 - 浮动覆盖 */}
+        {selectedNode && showDetail && (
+          <div className="relation-graph-demo__detail-overlay">
+            <div className="relation-graph-demo__detail">
+              <div className="relation-graph-demo__detail-header">
+                {selectedPerson ? (
+                  <>
+                    <div
+                      className="relation-graph-demo__detail-avatar"
+                      style={{ borderColor: factions[selectedPerson.faction]?.color, color: factions[selectedPerson.faction]?.color }}
                     >
-                      {EDGE_LABELS[rel.type] || rel.type}
-                    </span>
-                    <span className="relation-graph-demo__relation-label">{rel.label || ''}</span>
-                    <span
-                      className="relation-graph-demo__relation-name"
-                      style={{ color: otherFaction?.color }}
+                      {selectedPerson.name.charAt(0)}
+                    </div>
+                    <div className="relation-graph-demo__detail-meta">
+                      <h3 className="relation-graph-demo__detail-name">{selectedPerson.name}</h3>
+                      <div className="relation-graph-demo__detail-title">{selectedPerson.title}</div>
+                      <div className="relation-graph-demo__detail-faction">{factions[selectedPerson.faction]?.name}</div>
+                      <div className="relation-graph-demo__detail-years">
+                        {selectedPerson.birthYear || '?'}—{selectedPerson.deathYear || '?'}年
+                        {selectedPerson.birthYear && selectedPerson.deathYear && (
+                          <span> · 享年{selectedPerson.deathYear - selectedPerson.birthYear}岁</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      className="relation-graph-demo__detail-nav-btn"
+                      onClick={() => handleGoToPersonGallery(selectedPerson.id)}
                     >
-                      {otherName}
-                    </span>
-                    {rel.startYear && (
-                      <span className="relation-graph-demo__relation-years">
-                        {rel.startYear}{rel.endYear ? `—${rel.endYear}` : '起'}
-                      </span>
-                    )}
-                    {otherPerson && (
-                      <button
-                        className="relation-graph-demo__relation-goto"
-                        onClick={() => handleGoToPersonGallery(otherPerson.id)}
-                      >
-                        →
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                      👤 图鉴
+                    </button>
+                  </>
+                ) : selectedFaction ? (
+                  <>
+                    <div
+                      className="relation-graph-demo__detail-avatar"
+                      style={{ borderColor: selectedFaction.color, color: selectedFaction.color, background: selectedFaction.bgColor }}
+                    >
+                      {selectedFaction.name.charAt(0)}
+                    </div>
+                    <div className="relation-graph-demo__detail-meta">
+                      <h3 className="relation-graph-demo__detail-name">{selectedFaction.name}</h3>
+                      <div className="relation-graph-demo__detail-faction">势力节点</div>
+                    </div>
+                  </>
+                ) : null}
+                <button className="relation-graph-demo__detail-close" onClick={() => {
+                  setShowDetail(false);
+                }}>✕</button>
+              </div>
 
-          {/* 相关事件 */}
-          {selectedNodeEvents.length > 0 && (
-            <div className="relation-graph-demo__detail-events">
-              <div className="relation-graph-demo__section-label">相关事件</div>
-              {selectedNodeEvents.map(evt => (
-                <div
-                  key={evt.id}
-                  className="relation-graph-demo__event-item"
-                  onClick={() => handleGoToTimeline(evt.id)}
-                >
-                  <span className="relation-graph-demo__event-year">{evt.startYear}</span>
-                  <span className="relation-graph-demo__event-title">{evt.title}</span>
-                  <span className="relation-graph-demo__event-goto">📜</span>
+              {/* 关系列表 */}
+              {selectedNodeRelations.length > 0 && (
+                <div className="relation-graph-demo__detail-relations">
+                  <div className="relation-graph-demo__section-label">人物关系</div>
+                  {selectedNodeRelations.map((rel, i) => {
+                    const otherId = rel.source === selectedNode ? rel.target : rel.source;
+                    const otherPerson = persons.find(p => p.id === otherId);
+                    const otherFaction = otherId.startsWith('f_')
+                      ? factions[otherId.replace('f_', '') as FactionId]
+                      : otherPerson ? factions[otherPerson.faction] : null;
+                    const otherName = otherPerson?.name
+                      || (otherId.startsWith('f_') ? otherFaction?.name : null)
+                      || otherId;
+                    return (
+                      <div key={i} className="relation-graph-demo__relation-item">
+                        <span
+                          className="relation-graph-demo__relation-type"
+                          style={{ borderColor: EDGE_COLORS[rel.type], color: EDGE_COLORS[rel.type] }}
+                        >
+                          {EDGE_LABELS[rel.type] || rel.type}
+                        </span>
+                        <span className="relation-graph-demo__relation-label">{rel.label || ''}</span>
+                        <span
+                          className="relation-graph-demo__relation-name"
+                          style={{ color: otherFaction?.color }}
+                        >
+                          {otherName}
+                        </span>
+                        {rel.startYear && (
+                          <span className="relation-graph-demo__relation-years">
+                            {rel.startYear}{rel.endYear ? `—${rel.endYear}` : '起'}
+                          </span>
+                        )}
+                        {otherPerson && (
+                          <button
+                            className="relation-graph-demo__relation-goto"
+                            onClick={() => handleGoToPersonGallery(otherPerson.id)}
+                          >
+                            →
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
+
+              {/* 相关事件 */}
+              {selectedNodeEvents.length > 0 && (
+                <div className="relation-graph-demo__detail-events">
+                  <div className="relation-graph-demo__section-label">相关事件</div>
+                  {selectedNodeEvents.map(evt => (
+                    <div
+                      key={evt.id}
+                      className="relation-graph-demo__event-item"
+                      onClick={() => handleGoToTimeline(evt.id)}
+                    >
+                      <span className="relation-graph-demo__event-year">{evt.startYear}</span>
+                      <span className="relation-graph-demo__event-title">{evt.title}</span>
+                      <span className="relation-graph-demo__event-goto">📜</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
+      </div>
+
+      {/* 底部图例 - 合并为一行 */}
+      <div className="relation-graph-demo__footer">
+        <div className="relation-graph-demo__legend-inline">
+          {Object.entries(EDGE_LABELS).map(([type, label]) => (
+            <span key={type} className="relation-graph-demo__legend-item">
+              <span className="relation-graph-demo__legend-line" style={{ borderColor: EDGE_COLORS[type] }} />
+              {label}
+            </span>
+          ))}
         </div>
-      )}
-
-      {/* 图例 */}
-      <div className="relation-graph-demo__legend">
-        <div className="relation-graph-demo__legend-title">关系类型</div>
-        {Object.entries(EDGE_LABELS).map(([type, label]) => (
-          <span key={type} className="relation-graph-demo__legend-item">
-            <span className="relation-graph-demo__legend-line" style={{ borderColor: EDGE_COLORS[type] }} />
-            {label}
-          </span>
-        ))}
-      </div>
-
-      {/* 势力图例 */}
-      <div className="relation-graph-demo__factions">
-        <div className="relation-graph-demo__legend-title">势力</div>
-        {Object.values(factions).filter(f => f.id !== 'other').map(f => (
-          <span key={f.id} className="relation-graph-demo__faction-tag" style={{ color: f.color, borderColor: f.color }}>
-            {f.name}
-          </span>
-        ))}
-      </div>
-
-      {/* 统计 */}
-      <div className="relation-graph-demo__stats">
-        <span>节点: {relationNodes.length}</span>
-        <span>关系: {relationEdges.length}</span>
-        <span>人物: {persons.length}</span>
+        <div className="relation-graph-demo__factions-inline">
+          {Object.values(factions).filter(f => f.id !== 'other').map(f => (
+            <span key={f.id} className="relation-graph-demo__faction-tag" style={{ color: f.color, borderColor: f.color }}>
+              {f.name}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

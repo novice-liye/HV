@@ -5,7 +5,7 @@
 // ============================================================
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip, useMap, Polyline, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip, useMap, Polyline, Popup, Marker } from 'react-leaflet';
 import type { GeoJsonObject } from 'geojson';
 import L from 'leaflet';
 import { eventBus } from '../../core/EventBus';
@@ -151,7 +151,7 @@ const LocationPopup: React.FC<{
               }}
             >
               <span style={{ color: '#c9a96e', marginRight: 4 }}>
-                {evt.startYear === evt.endYear ? `${evt.startYear}` : `${evt.startYear}-${evt.endYear}`}
+                {evt.startYear === evt.endYear ? `${evt.startYear}年` : `${evt.startYear}-${evt.endYear}年`}
               </span>
               <span>{evt.title}</span>
               {evt.mapAnimation && <span style={{ marginLeft: 4, fontSize: 10, color: '#4A90D9' }}>▶</span>}
@@ -238,6 +238,30 @@ const MapViewSync: React.FC = () => {
   return null;
 };
 
+// 内部组件：监听外部 resize 信号，触发地图 invalidateSize
+const MapResizeController: React.FC<{ resizeKey: number }> = ({ resizeKey }) => {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [resizeKey, map]);
+  return null;
+};
+
+// 内部组件：同步地图缩放级别到父组件
+const MapZoomSync: React.FC<{ onZoomChange: (zoom: number) => void }> = ({ onZoomChange }) => {
+  const map = useMap();
+  useEffect(() => {
+    const handler = () => onZoomChange(map.getZoom());
+    map.on('zoomend', handler);
+    onZoomChange(map.getZoom());
+    return () => { map.off('zoomend', handler); };
+  }, [map, onZoomChange]);
+  return null;
+};
+
 export const TerritoryEvolution: React.FC = () => {
   const chartCanvasRef = useRef<HTMLCanvasElement>(null);
   const [currentYear, setCurrentYear] = useState(208);
@@ -247,8 +271,9 @@ export const TerritoryEvolution: React.FC = () => {
   const animRef = useRef<number>(0);
   const timelinePlayRef = useRef<number>(0); // 时间线播放定时器
   const yearAnimDoneRef = useRef(true); // 当前年份动画是否播放完毕
-  const [logs, setLogs] = useState<string[]>([]);
   const [geoData, setGeoData] = useState<GeoJsonObject | null>(null);
+  const [mapZoom, setMapZoom] = useState(5);
+  const [animHighlightedLocIds, setAnimHighlightedLocIds] = useState<Set<string>>(new Set()); // 动画关联地点
 
   // --- 新增状态：地点选中、行军动画、面板折叠 ---
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
@@ -274,6 +299,7 @@ export const TerritoryEvolution: React.FC = () => {
     color: string;
   } | null>(null);
   const [showChart, setShowChart] = useState(true);
+  const [mapResizeKey, setMapResizeKey] = useState(0);
   const [showLocationPanel, setShowLocationPanel] = useState(false);
   const [showAnimPanel, setShowAnimPanel] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(null);
@@ -286,11 +312,12 @@ export const TerritoryEvolution: React.FC = () => {
 
   // 加载 GeoJSON
   useEffect(() => {
-    fetch('/china_provinces.json')
-      .then(res => res.json())
-      .then(data => setGeoData(data))
-      .catch(err => console.error('Failed to load GeoJSON:', err));
-  }, []);
+  const basePath = import.meta.env.BASE_URL || '/';
+  fetch(`${basePath}china_provinces.json`)
+    .then(res => res.json())
+    .then(data => setGeoData(data))
+    .catch(err => console.error('Failed to load GeoJSON:', err));
+}, []);
 
   // 获取当前年份的省份势力映射
   const currentData = useMemo(() => {
@@ -340,7 +367,6 @@ export const TerritoryEvolution: React.FC = () => {
     const animate = () => {
       if (!running) return;
       const now = Date.now();
-      let hasChange = false;
       let narrativeUpdate: { name: string; narrative: string; position: [number, number]; color: string } | null = null;
 
       setAnimatedPaths(prev => {
@@ -418,14 +444,12 @@ export const TerritoryEvolution: React.FC = () => {
         const filtered = updated.filter(p => p.progress < 1);
         if (filtered.length === 0 && prev.length > 0) {
           // 所有动画完成
-          hasChange = true;
           return [];
         }
 
         // 只在有变化时更新
         const changed = updated.some((p, i) => p.progress !== prev[i]?.progress);
         if (changed) {
-          hasChange = true;
           return filtered;
         }
         return prev; // 无变化，返回原引用避免重渲染
@@ -461,35 +485,10 @@ export const TerritoryEvolution: React.FC = () => {
     };
   }, [currentData]);
 
-  // 省份 Popup 内容 - 永久标签
-  const onEachFeature = useCallback((feature: any, layer: any) => {
-    const name = feature?.properties?.name || '未知';
-    const faction = currentData.provinces[name] || 'neutral';
-    const factionInfo = factions[faction as FactionId];
-    const fc = factionColorMap[faction] || factionColorMap.neutral;
-
-    let factionLabel = '';
-    if (faction === 'war') {
-      factionLabel = '争夺中';
-    } else if (faction === 'neutral') {
-      factionLabel = '';
-    } else if (factionInfo) {
-      factionLabel = factionInfo.name;
-    } else {
-      factionLabel = '地方势力';
-    }
-
-    // 只对核心势力/战争省份显示标签，neutral 不显示
-    if (faction === 'neutral') return;
-
-    layer.bindTooltip(
-      `<div style="text-align:center;padding:1px 3px;line-height:1.3;">
-        <div style="font-weight:600;font-size:11px;color:#ffffff;text-shadow:0 0 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8), -1px -1px 2px rgba(0,0,0,0.9), 1px -1px 2px rgba(0,0,0,0.9), -1px 1px 2px rgba(0,0,0,0.9), 1px 1px 2px rgba(0,0,0,0.9);">${name.replace(/(省|市|自治区|壮族|回族|维吾尔|特别行政区)/g, '')}</div>
-        ${factionLabel ? `<div style="font-size:9px;color:${fc.color};text-shadow:0 0 3px rgba(0,0,0,0.9);margin-top:1px;">${factionLabel}</div>` : ''}
-      </div>`,
-      { permanent: true, direction: 'center', className: 'province-label' }
-    );
-  }, [currentData]);
+  // 省份 Popup 内容 - 不显示标签（省份名称和势力名称已隐藏）
+  const onEachFeature = useCallback((_feature: any, _layer: any) => {
+    // 省份标签已隐藏，只保留点击 Popup 功能
+  }, []);
 
   // 绘制面积对比图表
   const drawChart = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number) => {
@@ -609,10 +608,98 @@ export const TerritoryEvolution: React.FC = () => {
     return () => { running = false; cancelAnimationFrame(animRef.current); };
   }, [drawChart, showChart]);
 
+  // 将 MapAnimationConfig 转换为动画路径列表（支持多阶段）—— 组件级别共享
+  const typeLabels: Record<string, string> = {
+    march: '行军', battle: '战役', siege: '攻城', expansion: '扩张', retreat: '撤退',
+    fire: '火攻', ambush: '伏击', converge: '集结',
+  };
+
+  const buildAnimPaths = useCallback((anim: MapAnimationConfig): Array<{
+    id: string;
+    positions: [number, number][];
+    color: string;
+    label: string;
+    progress: number;
+    startTime: number;
+    duration: number;
+    delay: number;
+    effect?: 'fire' | 'explosion' | 'arrow' | 'wave' | 'none';
+    effectColor?: string;
+    waypoints?: Array<{ index: number; name: string; narrative: string; dwellTime?: number; }>;
+    totalDwellTime: number;
+  }> => {
+    const now = Date.now();
+    if (anim.phases && anim.phases.length > 0) {
+      let cumulativeDelay = 0;
+      return anim.phases.map((phase, i) => {
+        const phaseDelay = cumulativeDelay + (phase.delay || 0);
+        const totalDwell = (phase.waypoints || []).reduce((sum, wp) => sum + (wp.dwellTime || 0), 0);
+        const effectiveDuration = (phase.duration || 3000) + totalDwell;
+        cumulativeDelay = phaseDelay + effectiveDuration;
+        return {
+          id: `phase-${Date.now()}-${i}`,
+          positions: phase.path.map(c => [c.lat, c.lng] as [number, number]),
+          color: phase.color || anim.color || '#c9a96e',
+          label: phase.label,
+          progress: 0,
+          startTime: now,
+          duration: effectiveDuration,
+          delay: phaseDelay,
+          effect: phase.effect || 'none',
+          effectColor: phase.effectColor,
+          waypoints: phase.waypoints,
+          totalDwellTime: totalDwell,
+        };
+      });
+    }
+    return [{
+      id: `anim-${Date.now()}`,
+      positions: anim.path.map(c => [c.lat, c.lng] as [number, number]),
+      color: anim.color || '#c9a96e',
+      label: anim.label || typeLabels[anim.type] || anim.type,
+      progress: 0,
+      startTime: now,
+      duration: anim.duration || 4000,
+      delay: 0,
+      waypoints: undefined,
+      totalDwellTime: 0,
+    }];
+  }, []);
+
+  // 从动画路径坐标中提取附近地点 ID（用于动画时高亮显示关联地点）
+  const extractAnimLocations = useCallback((anim: MapAnimationConfig): Set<string> => {
+    const locIds = new Set<string>();
+    const coords: Array<[number, number]> = [];
+    // 收集所有路径点
+    if (anim.phases && anim.phases.length > 0) {
+      for (const phase of anim.phases) {
+        for (const pt of phase.path) {
+          coords.push([pt.lat, pt.lng]);
+        }
+      }
+    } else if (anim.path) {
+      for (const pt of anim.path) {
+        coords.push([pt.lat, pt.lng]);
+      }
+    }
+    // 匹配距离在 1.5 度以内的地点
+    for (const loc of mapLocations) {
+      for (const [lat, lng] of coords) {
+        const dist = Math.sqrt((loc.coordinate.lat - lat) ** 2 + (loc.coordinate.lng - lng) ** 2);
+        if (dist < 1.5) {
+          locIds.add(loc.id);
+          break;
+        }
+      }
+    }
+    return locIds;
+  }, []);
+
   // 自动播放（支持事件动画联动）
   useEffect(() => {
     if (!isPlaying) {
       clearInterval(timelinePlayRef.current);
+      setAnimHighlightedLocIds(new Set());
       return;
     }
 
@@ -625,7 +712,10 @@ export const TerritoryEvolution: React.FC = () => {
       // 有动画事件：播放动画，等结束后进入下一年
       yearAnimDoneRef.current = false;
       const evt = yearEvents[0]; // 取第一个事件
-      const paths = buildAnimPaths(evt.mapAnimation);
+      const paths = buildAnimPaths(evt.mapAnimation!);
+      // 提取动画关联地点并高亮
+      const highlightedLocs = extractAnimLocations(evt.mapAnimation!);
+      setAnimHighlightedLocIds(highlightedLocs);
       setAnimatedPaths([]);
 
       setTimeout(() => {
@@ -638,6 +728,7 @@ export const TerritoryEvolution: React.FC = () => {
         const waitTime = Math.round((totalDuration + 1500) / playSpeed);
         timelinePlayRef.current = window.setTimeout(() => {
           yearAnimDoneRef.current = true;
+          setAnimHighlightedLocIds(new Set());
           setCurrentYear(prev => {
             if (prev >= 280) { setIsPlaying(false); setPlayWithAnimation(false); return 280; }
             return prev + 1;
@@ -646,6 +737,7 @@ export const TerritoryEvolution: React.FC = () => {
       }, 100);
     } else {
       // 无动画事件：按速度间隔进入下一年
+      setAnimHighlightedLocIds(new Set());
       const interval = Math.round(800 / playSpeed); // 无动画时稍慢一些，让用户看清领土变化
       timelinePlayRef.current = window.setTimeout(() => {
         setCurrentYear(prev => {
@@ -658,7 +750,7 @@ export const TerritoryEvolution: React.FC = () => {
     return () => {
       clearTimeout(timelinePlayRef.current);
     };
-  }, [isPlaying, currentYear, playWithAnimation, playSpeed, events]);
+  }, [isPlaying, currentYear, playWithAnimation, playSpeed, events, buildAnimPaths, extractAnimLocations]);
 
   // EventBus 联动 - 时间线同步
   useEffect(() => {
@@ -671,13 +763,6 @@ export const TerritoryEvolution: React.FC = () => {
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    const unsub = eventBus.on('timeline:viewChange', () => {
-      setLogs(prev => [...prev.slice(-6), `[${new Date().toLocaleTimeString()}] timeline:viewChange → 更新疆域到 ${currentYear}年`]);
-    }, 'territory-log');
-    return () => unsub();
-  }, [currentYear]);
-
   // EventBus 联动 - 地图飞行、动画、事件选中
   useEffect(() => {
     const findNearest = (coord: GeoCoordinate) => {
@@ -687,67 +772,6 @@ export const TerritoryEvolution: React.FC = () => {
         const dist = dx * dx + dy * dy;
         return dist < best.dist ? { id: loc.id, dist } : best;
       }, { id: '', dist: Infinity });
-    };
-
-    const typeLabels: Record<string, string> = {
-      march: '行军', battle: '战役', siege: '攻城', expansion: '扩张', retreat: '撤退',
-      fire: '火攻', ambush: '伏击', converge: '集结',
-    };
-
-    // 将 MapAnimationConfig 转换为动画路径列表（支持多阶段）
-    const buildAnimPaths = (anim: MapAnimationConfig): Array<{
-      id: string;
-      positions: [number, number][];
-      color: string;
-      label: string;
-      progress: number;
-      startTime: number;
-      duration: number;
-      delay: number;
-      effect?: 'fire' | 'explosion' | 'arrow' | 'wave' | 'none';
-      effectColor?: string;
-      waypoints?: Array<{ index: number; name: string; narrative: string; dwellTime?: number; }>;
-      totalDwellTime: number;
-    }> => {
-      const now = Date.now();
-      // 多阶段动画
-      if (anim.phases && anim.phases.length > 0) {
-        let cumulativeDelay = 0;
-        return anim.phases.map((phase, i) => {
-          const phaseDelay = cumulativeDelay + (phase.delay || 0);
-          // 计算 dwellTime 总和，加到 duration 中
-          const totalDwell = (phase.waypoints || []).reduce((sum, wp) => sum + (wp.dwellTime || 0), 0);
-          const effectiveDuration = (phase.duration || 3000) + totalDwell;
-          cumulativeDelay = phaseDelay + effectiveDuration;
-          return {
-            id: `phase-${Date.now()}-${i}`,
-            positions: phase.path.map(c => [c.lat, c.lng] as [number, number]),
-            color: phase.color || anim.color || '#c9a96e',
-            label: phase.label,
-            progress: 0,
-            startTime: now,
-            duration: effectiveDuration,
-            delay: phaseDelay,
-            effect: phase.effect || 'none',
-            effectColor: phase.effectColor,
-            waypoints: phase.waypoints,
-            totalDwellTime: totalDwell,
-          };
-        });
-      }
-      // 单阶段动画（兼容旧数据）
-      return [{
-        id: `anim-${Date.now()}`,
-        positions: anim.path.map(c => [c.lat, c.lng] as [number, number]),
-        color: anim.color || '#c9a96e',
-        label: anim.label || typeLabels[anim.type] || anim.type,
-        progress: 0,
-        startTime: now,
-        duration: anim.duration || 4000,
-        delay: 0,
-        waypoints: undefined,
-        totalDwellTime: 0,
-      }];
     };
 
     const unsubs = [
@@ -788,18 +812,21 @@ export const TerritoryEvolution: React.FC = () => {
         if (evt.mapAnimation) {
           setAnimatedPaths([]);
           setTimeout(() => {
-            const paths = buildAnimPaths(evt.mapAnimation);
+            const paths = buildAnimPaths(evt.mapAnimation!);
             setAnimatedPaths(paths);
           }, 100);
         }
       }, 'territory-map'),
     ];
     return () => unsubs.forEach(u => u());
-  }, []);
+  }, [buildAnimPaths]);
 
   const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newYear = Number(e.target.value);
     setCurrentYear(newYear);
+    setIsPlaying(false);
+    setPlayWithAnimation(false);
+    setAnimatedPaths([]);
     eventBus.emit('territory:yearChange', newYear, 'territory');
   }, []);
 
@@ -807,14 +834,19 @@ export const TerritoryEvolution: React.FC = () => {
   const playPresetAnimation = useCallback((eventId: string) => {
     const evt = events.find(e => e.id === eventId);
     if (!evt?.mapAnimation) return;
-    setAnimatedPaths([]); // 先清除旧动画，避免重复叠加
+    const highlightedLocs = extractAnimLocations(evt.mapAnimation);
+    setAnimHighlightedLocIds(highlightedLocs);
+    setAnimatedPaths([]);
     setTimeout(() => {
-      const paths = buildAnimPaths(evt.mapAnimation);
+      const paths = buildAnimPaths(evt.mapAnimation!);
       setAnimatedPaths(paths);
     }, 0);
-  }, []);
+  }, [events, buildAnimPaths, extractAnimLocations]);
 
-  const clearAnimations = useCallback(() => setAnimatedPaths([]), []);
+  const clearAnimations = useCallback(() => {
+    setAnimatedPaths([]);
+    setAnimHighlightedLocIds(new Set());
+  }, []);
 
   const handleGoToTimeline = useCallback((evt: HistoricalEvent) => {
     eventBus.emit('event:selected', evt, 'territory-map');
@@ -1079,6 +1111,9 @@ export const TerritoryEvolution: React.FC = () => {
             zoomControl={false}
             attributionControl={false}
           >
+            <MapViewSync />
+            <MapResizeController resizeKey={mapResizeKey} />
+            <MapZoomSync onZoomChange={setMapZoom} />
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
             />
@@ -1089,7 +1124,6 @@ export const TerritoryEvolution: React.FC = () => {
               opacity={0.3}
             />
 
-            <MapViewSync />
             <FlyToController target={flyToTarget} />
             <NarrativePopup narrative={activeNarrative} />
 
@@ -1103,118 +1137,298 @@ export const TerritoryEvolution: React.FC = () => {
               />
             )}
 
-            {/* 地点标记 - 白色描边圆点 + 势力色名字 + 点击 Popup */}
+            {/* 地点标记 - 缩放自适应 + 动画关联地点高亮 */}
             {showEventLayer && mapLocations.map(loc => {
               const isCapital = loc.type === 'capital';
               const isBattlefield = loc.type === 'battlefield';
               const isPass = loc.type === 'pass';
-              const radius = isCapital ? 7 : isBattlefield ? 5 : isPass ? 4 : 3;
               // 使用动态势力颜色（随年份变化）
               const dynamicFaction = getLocationFaction(loc.id, currentYear);
               const factionColor = factionColorMap[dynamicFaction]?.color || '#999';
               const isSelected = selectedLocation === loc.id;
               const locEvents = getLocationEvents(loc.id);
+              // 动画关联地点高亮
+              const isAnimHighlighted = animHighlightedLocIds.has(loc.id);
+
+              // 根据缩放级别动态调整大小
+              const scale = mapZoom >= 8 ? 1.4 : mapZoom >= 7 ? 1.2 : mapZoom >= 6 ? 1.0 : mapZoom >= 5 ? 0.8 : 0.65;
+              const baseRadius = isCapital ? 8 : isBattlefield ? 6 : isPass ? 5 : 3.5;
+              const radius = ((isSelected || isAnimHighlighted) ? baseRadius + 3 : baseRadius) * scale;
+              const strokeWidth = ((isSelected || isAnimHighlighted) ? 3 : isCapital ? 3 : 2) * scale;
+              const fontSize = (isCapital ? 13 : 11) * scale;
+              const dotSize = 6 * scale;
+
+              // 根据缩放级别控制标签显示：大幅降低门槛，让更多地点可见
+              const showLabel = isCapital
+                || isBattlefield
+                || isPass
+                || isAnimHighlighted
+                || (mapZoom >= 5);
+              // 动画关联地点或重要地点始终显示圆点
+              const showDot = isCapital || isBattlefield || isAnimHighlighted || mapZoom >= 5;
+
+              if (!showDot) return null;
+
+              // 使用 divIcon 实现缩放自适应
+              const locIcon = L.divIcon({
+                className: '',
+                html: `<div style="
+                  position: relative;
+                  width: ${radius * 2 + 4}px;
+                  height: ${radius * 2 + 4}px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                ">
+                  <div style="
+                    width: ${radius * 2}px;
+                    height: ${radius * 2}px;
+                    border-radius: 50%;
+                    background: #ffffff;
+                    border: ${strokeWidth}px solid ${isSelected ? '#fff' : factionColor};
+                    box-shadow: 0 0 ${4 * scale}px ${factionColor}88, 0 ${1 * scale}px ${3 * scale}px rgba(0,0,0,0.5);
+                    ${isSelected ? `box-shadow: 0 0 ${8 * scale}px ${factionColor}, 0 0 ${16 * scale}px ${factionColor}66;` : ''}
+                    ${isAnimHighlighted && !isSelected ? `box-shadow: 0 0 ${10 * scale}px ${factionColor}, 0 0 ${20 * scale}px ${factionColor}88; animation: pulse 1.5s ease-in-out infinite;` : ''}
+                  "></div>
+                  ${showLabel ? `<div style="
+                    position: absolute;
+                    bottom: ${radius * 2 + 3}px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    white-space: nowrap;
+                    display: flex;
+                    align-items: center;
+                    gap: ${2 * scale}px;
+                    pointer-events: none;
+                  ">
+                    <span style="
+                      font-size: ${fontSize}px;
+                      font-weight: ${isCapital ? 700 : 600};
+                      color: #ffffff;
+                      text-shadow: 0 0 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,0.9), -1px -1px 2px rgba(0,0,0,0.9), 1px -1px 2px rgba(0,0,0,0.9), -1px 1px 2px rgba(0,0,0,0.9), 1px 1px 2px rgba(0,0,0,0.9);
+                      -webkit-text-stroke: 0.5px rgba(0,0,0,0.6);
+                    ">${loc.name}</span>
+                    <span style="
+                      display: inline-block;
+                      width: ${dotSize}px;
+                      height: ${dotSize}px;
+                      border-radius: 50%;
+                      background-color: ${factionColor};
+                      box-shadow: 0 0 ${3 * scale}px ${factionColor};
+                    "></span>
+                  </div>` : ''}
+                </div>`,
+                iconSize: [radius * 2 + 4, radius * 2 + 4],
+                iconAnchor: [radius + 2, radius + 2],
+                tooltipAnchor: [0, -(radius + 2)],
+              });
 
               return (
-                <CircleMarker
+                <Marker
                   key={loc.id}
-                  center={[loc.coordinate.lat, loc.coordinate.lng]}
-                  radius={isSelected ? radius + 3 : radius}
-                  pathOptions={{
-                    color: isSelected ? '#fff' : factionColor,
-                    fillColor: '#ffffff',
-                    fillOpacity: isSelected ? 1 : 0.95,
-                    weight: isSelected ? 3 : isCapital ? 3 : 2,
-                  }}
+                  position={[loc.coordinate.lat, loc.coordinate.lng]}
+                  icon={locIcon}
                   eventHandlers={{
                     click: () => handleLocationClick(loc.id),
                   }}
                 >
-                  <Tooltip permanent direction="top" className="territory-evolution__capital-tooltip">
-                    <span style={{
-                      color: '#ffffff',
-                      fontWeight: isCapital ? 700 : 600,
-                      fontSize: isCapital ? '12px' : '10px',
-                      textShadow: `0 0 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,0.9), -1px -1px 2px rgba(0,0,0,0.9), 1px -1px 2px rgba(0,0,0,0.9), -1px 1px 2px rgba(0,0,0,0.9), 1px 1px 2px rgba(0,0,0,0.9)`,
-                      WebkitTextStroke: '0.5px rgba(0,0,0,0.6)',
-                    }}>
-                      {loc.name}
-                    </span>
-                    {/* 势力色小圆点标识 */}
-                    <span style={{
-                      display: 'inline-block',
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: factionColor,
-                      marginLeft: '2px',
-                      verticalAlign: 'middle',
-                      boxShadow: `0 0 3px ${factionColor}`,
-                    }} />
-                  </Tooltip>
-
                   {/* 点击弹出详细信息 */}
                   <Popup maxWidth={280} minWidth={220}>
                     <LocationPopup loc={loc} relatedEvents={locEvents} />
                   </Popup>
-                </CircleMarker>
+                </Marker>
               );
             })}
 
-            {/* 著作标记层 */}
-            {showWorksLayer && works.filter(w => w.location).map(work => (
-              <CircleMarker
-                key={work.id}
-                center={[work.location!.coordinate.lat, work.location!.coordinate.lng]}
-                radius={8}
-                pathOptions={{
-                  color: WORK_TYPE_COLORS[work.type],
-                  fillColor: WORK_TYPE_COLORS[work.type],
-                  fillOpacity: 0.6,
-                  weight: 2,
-                }}
-              >
-                <Tooltip permanent direction="top" className="territory-evolution__capital-tooltip">
-                  <span style={{
-                    color: '#ffffff',
-                    fontWeight: 600,
-                    fontSize: '11px',
-                    textShadow: '0 0 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)',
-                  }}>
-                    📖 {work.title}
-                  </span>
-                </Tooltip>
-                <Popup maxWidth={260} minWidth={200}>
-                  <div style={{ color: '#e8e0d0', fontSize: '13px' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#e8e0d0', marginBottom: '8px' }}>
-                      《{work.title}》
+            {/* 著作标记层 - 按地点分组，同一地点合并为一个标记 */}
+            {showWorksLayer && (() => {
+              // 按地点坐标分组
+              const grouped = new Map<string, typeof works>();
+              works.filter(w => w.location).forEach(w => {
+                const key = `${w.location!.coordinate.lat},${w.location!.coordinate.lng}`;
+                if (!grouped.has(key)) grouped.set(key, []);
+                grouped.get(key)!.push(w);
+              });
+              return Array.from(grouped.entries()).map(([coordKey, groupWorks]) => {
+                const first = groupWorks[0];
+                const lat = first.location!.coordinate.lat;
+                const lng = first.location!.coordinate.lng;
+                const locName = first.location?.name || '';
+                const count = groupWorks.length;
+                const isSingle = count === 1;
+                // 根据缩放级别调整大小
+                const iconSize = mapZoom >= 7 ? 22 : mapZoom >= 6 ? 18 : 14;
+                const svgSize = iconSize * 0.6;
+                const fontSize = mapZoom >= 7 ? 13 : mapZoom >= 6 ? 12 : 11;
+                const addrFontSize = fontSize - 2;
+                const showTitle = mapZoom >= 4;
+                // SVG 图标路径（按类型）
+                const typeIcons: Record<string, string> = {
+                  military: 'M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z',
+                  literature: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 1.99.89 1.99 1.99v3.01c0 .55.45 1 1 1h1c.9 0 1.64.58 1.9 1.39',
+                  history: 'M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21a9 9 0 000-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z',
+                  philosophy: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
+                  medical: 'M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z',
+                  other: 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z',
+                };
+                const typeColor = isSingle ? WORK_TYPE_COLORS[first.type] : '#c9a96e';
+                const iconPath = isSingle ? (typeIcons[first.type] || typeIcons.other) : typeIcons.other;
+
+                const icon = L.divIcon({
+                  className: '',
+                  html: `<div style="
+                    position: relative;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    pointer-events: auto;
+                  ">
+                    <div style="
+                      width: ${iconSize}px;
+                      height: ${iconSize}px;
+                      border-radius: 4px;
+                      background: rgba(13, 17, 23, 0.88);
+                      border: 1.5px solid ${typeColor};
+                      box-shadow: 0 0 6px ${typeColor}55, 0 1px 4px rgba(0,0,0,0.5);
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      backdrop-filter: blur(4px);
+                      flex-shrink: 0;
+                      position: relative;
+                    ">
+                      <svg viewBox="0 0 24 24" width="${svgSize}" height="${svgSize}" fill="${typeColor}">
+                        <path d="${iconPath}"/>
+                      </svg>
+                      ${!isSingle ? `<div style="
+                        position: absolute;
+                        top: -6px;
+                        right: -6px;
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 50%;
+                        background: #c9a96e;
+                        color: #0d1117;
+                        font-size: 10px;
+                        font-weight: 700;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        box-shadow: 0 0 4px rgba(201,169,110,0.5);
+                        line-height: 1;
+                      ">${count}</div>` : ''}
                     </div>
-                    <div style={{ marginBottom: '6px' }}>
-                      <span style={{ color: WORK_TYPE_COLORS[work.type] }}>
-                        {WORK_TYPE_LABELS[work.type]}
-                      </span>
-                      <span style={{ color: 'rgba(232,224,208,0.4)', margin: '0 6px' }}>·</span>
-                      <span style={{ color: '#c9a96e' }}>{work.author}</span>
-                      <span style={{ color: 'rgba(232,224,208,0.4)', margin: '0 6px' }}>·</span>
-                      <span>{work.year < 0 ? `公元前${Math.abs(work.year)}` : work.year}年</span>
-                    </div>
-                    <p style={{ margin: '0 0 6px', lineHeight: 1.5, color: 'rgba(232,224,208,0.7)' }}>
-                      {work.description}
-                    </p>
-                    <div style={{
-                      background: 'rgba(201,169,110,0.08)',
-                      borderLeft: `3px solid ${WORK_TYPE_COLORS[work.type]}`,
-                      borderRadius: '0 4px 4px 0',
-                      padding: '6px 10px',
-                      fontSize: '12px',
-                      color: 'rgba(232,224,208,0.5)',
-                    }}>
-                      ✦ {work.significance}
-                    </div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+                    ${showTitle ? `<div style="
+                      margin-top: 2px;
+                      text-align: center;
+                      white-space: nowrap;
+                      pointer-events: none;
+                    ">
+                      <div style="
+                        font-size: ${fontSize}px;
+                        font-weight: 700;
+                        color: #fff;
+                        text-shadow: 0 0 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,0.9);
+                        letter-spacing: 0.5px;
+                        line-height: 1.2;
+                      ">${isSingle ? '📖 ' + first.title : '📚 ' + locName + ' (' + count + '部)'}</div>
+                      ${locName && isSingle ? `<div style="
+                        font-size: ${addrFontSize}px;
+                        font-weight: 500;
+                        color: ${typeColor};
+                        text-shadow: 0 0 3px rgba(0,0,0,1), 0 0 6px rgba(0,0,0,0.8);
+                        line-height: 1.2;
+                      ">📍 ${locName}</div>` : ''}
+                    </div>` : ''}
+                  </div>`,
+                  iconSize: [iconSize + 4, iconSize + 4],
+                  iconAnchor: [(iconSize + 4) / 2, (iconSize + 4) / 2],
+                  tooltipAnchor: [0, -(iconSize + 4) / 2],
+                });
+
+                return (
+                  <Marker
+                    key={coordKey}
+                    position={[lat, lng]}
+                    icon={icon}
+                  >
+                    <Popup maxWidth={300} minWidth={220}>
+                      <div style={{ color: '#e8e0d0', fontSize: '13px' }}>
+                        {isSingle ? (
+                          <>
+                            <div style={{ fontSize: '16px', fontWeight: 700, color: '#e8e0d0', marginBottom: '8px' }}>
+                              《{first.title}》
+                            </div>
+                            <div style={{ marginBottom: '6px' }}>
+                              <span style={{ color: WORK_TYPE_COLORS[first.type] }}>
+                                {WORK_TYPE_LABELS[first.type]}
+                              </span>
+                              <span style={{ color: 'rgba(232,224,208,0.4)', margin: '0 6px' }}>·</span>
+                              <span style={{ color: '#c9a96e' }}>{first.author}</span>
+                              <span style={{ color: 'rgba(232,224,208,0.4)', margin: '0 6px' }}>·</span>
+                              <span>{first.year < 0 ? `公元前${Math.abs(first.year)}` : first.year}年</span>
+                            </div>
+                            <p style={{ margin: '0 0 6px', lineHeight: 1.5, color: 'rgba(232,224,208,0.7)' }}>
+                              {first.description}
+                            </p>
+                            <div style={{
+                              background: 'rgba(201,169,110,0.08)',
+                              borderLeft: `3px solid ${WORK_TYPE_COLORS[first.type]}`,
+                              borderRadius: '0 4px 4px 0',
+                              padding: '6px 10px',
+                              fontSize: '12px',
+                              color: 'rgba(232,224,208,0.5)',
+                            }}>
+                              ✦ {first.significance}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: '15px', fontWeight: 700, color: '#e8e0d0', marginBottom: '2px' }}>
+                              📚 {locName}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'rgba(232,224,208,0.35)', marginBottom: '8px' }}>
+                              共 {count} 部著作
+                            </div>
+                            <div style={{
+                              maxHeight: '320px',
+                              overflowY: 'auto',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px',
+                              paddingRight: '2px',
+                            }}>
+                              {groupWorks.map(w => (
+                                <div key={w.id} style={{
+                                  padding: '5px 8px',
+                                  background: 'rgba(255,255,255,0.02)',
+                                  borderLeft: `2px solid ${WORK_TYPE_COLORS[w.type]}`,
+                                  borderRadius: '0 3px 3px 0',
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '1px' }}>
+                                    <span style={{ fontWeight: 600, fontSize: '13px', color: '#e8e0d0' }}>
+                                      《{w.title}》
+                                    </span>
+                                    <span style={{ fontSize: '10px', color: WORK_TYPE_COLORS[w.type], flexShrink: 0 }}>
+                                      {WORK_TYPE_LABELS[w.type]}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: 'rgba(232,224,208,0.4)' }}>
+                                    <span style={{ color: '#c9a96e' }}>{w.author}</span>
+                                    <span style={{ margin: '0 3px' }}>·</span>
+                                    <span>{w.year < 0 ? `公元前${Math.abs(w.year)}` : w.year}年</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              });
+            })()}
 
             {/* 行军路线动画 - 支持多阶段和特效 */}
             {showEventLayer && animPathSegments.map(segment => {
@@ -1307,48 +1521,48 @@ export const TerritoryEvolution: React.FC = () => {
             >
               {currentYear}年
             </div>
-
-            {/* 颜色图例 */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '12px',
-                left: '12px',
-                zIndex: 1000,
-                background: 'rgba(13, 17, 23, 0.85)',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                border: '1px solid rgba(201, 169, 110, 0.2)',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
-              <div style={{ fontSize: '11px', color: 'rgba(232,224,208,0.5)', marginBottom: '6px', fontWeight: 600 }}>
-                图例说明
-              </div>
-              {LEGEND_ITEMS.map(item => (
-                <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: '14px',
-                      height: '14px',
-                      borderRadius: '3px',
-                      backgroundColor: item.color,
-                      border: item.key === 'war' ? '2px solid #FF6633' : '1px solid rgba(255,255,255,0.15)',
-                      opacity: item.key === 'war' ? 1 : 0.8,
-                    }}
-                  />
-                  <span style={{ fontSize: '11px', color: 'rgba(232,224,208,0.7)', whiteSpace: 'nowrap' }}>
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-            </div>
           </MapContainer>
+
+          {/* 颜色图例 - 放在 MapContainer 外部避免被 Leaflet pane 遮挡 */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '12px',
+              left: '12px',
+              zIndex: 1000,
+              background: 'rgba(13, 17, 23, 0.88)',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              border: '1px solid rgba(201, 169, 110, 0.2)',
+              pointerEvents: 'auto',
+            }}
+          >
+            <div style={{ fontSize: '11px', color: 'rgba(232,224,208,0.5)', marginBottom: '6px', fontWeight: 600 }}>
+              图例说明
+            </div>
+            {LEGEND_ITEMS.map(item => (
+              <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '3px',
+                    backgroundColor: item.color,
+                    border: item.key === 'war' ? '2px solid #FF6633' : '1px solid rgba(255,255,255,0.15)',
+                    opacity: item.key === 'war' ? 1 : 0.8,
+                  }}
+                />
+                <span style={{ fontSize: '11px', color: 'rgba(232,224,208,0.7)', whiteSpace: 'nowrap' }}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
+          </div>
 
           {/* 图表折叠按钮 */}
           <button
-            onClick={() => setShowChart(!showChart)}
+            onClick={() => { setShowChart(!showChart); setMapResizeKey(k => k + 1); }}
             style={{
               position: 'absolute',
               top: '12px',
@@ -1435,7 +1649,10 @@ export const TerritoryEvolution: React.FC = () => {
                       <span style={{ fontSize: '12px' }}>
                         {{ march: '🏃', battle: '⚔️', siege: '🏰', expansion: '📈', retreat: '🏃‍♂️' }[evt.mapAnimation!.type]}
                       </span>
-                      <span>{evt.title}</span>
+                      <span style={{ color: '#c9a96e', fontSize: '10px', flexShrink: 0 }}>
+                        {evt.startYear === evt.endYear ? `${evt.startYear}年` : `${evt.startYear}-${evt.endYear}年`}
+                      </span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{evt.title}</span>
                     </button>
                   );
                 })}
@@ -1663,7 +1880,7 @@ export const TerritoryEvolution: React.FC = () => {
             <button
               key={snap.year}
               className="territory-evolution__snap-btn"
-              onClick={() => { setCurrentYear(snap.year); setIsPlaying(false); }}
+              onClick={() => { setCurrentYear(snap.year); setIsPlaying(false); setAnimatedPaths([]); }}
             >
               {snap.year}
             </button>
@@ -1705,15 +1922,15 @@ export const TerritoryEvolution: React.FC = () => {
         })}
       </div>
 
-      {/* EventBus 日志 */}
-      {logs.length > 0 && (
+      {/* EventBus 日志 - 隐藏 */}
+      {/* {logs.length > 0 && (
         <div className="eventbus-log">
           <div className="eventbus-log__title">EventBus 事件日志</div>
           {logs.map((log, i) => (
             <div key={i} className="eventbus-log__entry">{log}</div>
           ))}
         </div>
-      )}
+      )} */}
     </div>
   );
 };

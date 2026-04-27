@@ -6,7 +6,8 @@
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { eventBus } from '../../core/EventBus';
-import { factions } from '../../data/factions';
+import { PageHeader, Card, Badge } from '../ui';
+import { factionById } from '../../data/cache';
 import {
   getEventStatsByYear,
   getPersonStatsByYear,
@@ -153,7 +154,7 @@ export const Dashboard: React.FC = () => {
 
     // 柱子
     activeFactions.forEach((key, i) => {
-      const f = factions[key];
+      const f = factionById[key];
       if (!f) return;
       const val = (stats.military as Record<string, number>)[key] || 0;
       const x = pad.left + gap + i * (barW + gap);
@@ -188,7 +189,7 @@ export const Dashboard: React.FC = () => {
     if (!ctx) return;
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, w, h);
     drawTitle(ctx, '势力人口趋势（万口）', 12, 18);
-    drawLegend(ctx, FACTION_KEYS.filter(k => k !== 'other').map(k => ({ label: factions[k]?.name || k, color: factions[k]?.color || '#999' })), 12, 34);
+    drawLegend(ctx, FACTION_KEYS.filter(k => k !== 'other').map(k => ({ label: factionById[k]?.name || k, color: factionById[k]?.color || '#999' })), 12, 34);
 
     const pad = { top: 50, bottom: 30, left: 50, right: 20 };
     const chartW = w - pad.left - pad.right;
@@ -223,7 +224,7 @@ export const Dashboard: React.FC = () => {
 
     // 折线
     FACTION_KEYS.filter(k => k !== 'other').forEach(key => {
-      const f = factions[key];
+      const f = factionById[key];
       if (!f) return;
       ctx.beginPath();
       ctx.strokeStyle = f.color;
@@ -245,7 +246,7 @@ export const Dashboard: React.FC = () => {
     if (!ctx) return;
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, w, h);
     drawTitle(ctx, '势力疆域面积变化（万km²）', 12, 18);
-    drawLegend(ctx, FACTION_KEYS.filter(k => k !== 'other').map(k => ({ label: factions[k]?.name || k, color: factions[k]?.color || '#999' })), 12, 34);
+    drawLegend(ctx, FACTION_KEYS.filter(k => k !== 'other').map(k => ({ label: factionById[k]?.name || k, color: factionById[k]?.color || '#999' })), 12, 34);
 
     const pad = { top: 50, bottom: 30, left: 50, right: 20 };
     const chartW = w - pad.left - pad.right;
@@ -281,7 +282,7 @@ export const Dashboard: React.FC = () => {
     // 堆叠面积
     const order: FactionId[] = ['other', 'wu', 'shu', 'han', 'wei'];
     order.forEach(key => {
-      const f = factions[key];
+      const f = factionById[key];
       if (!f) return;
       ctx.beginPath();
       territoryAreaTimeline.forEach((row, i) => {
@@ -368,13 +369,12 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="dashboard">
-      <div className="dashboard__header">
-        <h2 className="dashboard__title">📊 数据统计仪表盘</h2>
-        <p className="dashboard__subtitle">
-          {currentYear}年 · 活跃人物 {stats.persons.total} 人 · 记录事件 {stats.events.total} 个 ·
-          总人口 {(stats.population.wei + stats.population.shu + stats.population.wu + stats.population.han + stats.population.other)} 万口
-        </p>
-      </div>
+      <PageHeader
+        icon="📊"
+        title="数据统计仪表盘"
+        subtitle={`${currentYear}年 · 活跃人物 ${stats.persons.total} 人 · 记录事件 ${stats.events.total} 个 · 总人口 ${(stats.population.wei + stats.population.shu + stats.population.wu + stats.population.han + stats.population.other)} 万口`}
+        align="left"
+      />
 
       {/* 图表网格 */}
       <div className="dashboard__grid">
@@ -384,7 +384,7 @@ export const Dashboard: React.FC = () => {
           onClick={() => handlePanelClick('event')}
         >
           <canvas ref={el => { canvasRefs.current['event-pie'] = el; }} />
-          <div className="dashboard__chart-badge">事件分类</div>
+          <Badge label="事件分类" color="#D94A4A" />
         </div>
         <div
           className={`dashboard__chart dashboard-chart ${selectedPanel === 'military' ? 'dashboard__chart--active' : ''}`}
@@ -392,7 +392,7 @@ export const Dashboard: React.FC = () => {
           onClick={() => handlePanelClick('military')}
         >
           <canvas ref={el => { canvasRefs.current['military-bar'] = el; }} />
-          <div className="dashboard__chart-badge">兵力对比</div>
+          <Badge label="兵力对比" color="#4A90D9" />
         </div>
         <div
           className={`dashboard__chart dashboard-chart ${selectedPanel === 'population' ? 'dashboard__chart--active' : ''}`}
@@ -400,7 +400,7 @@ export const Dashboard: React.FC = () => {
           onClick={() => handlePanelClick('population')}
         >
           <canvas ref={el => { canvasRefs.current['population-line'] = el; }} />
-          <div className="dashboard__chart-badge">人口趋势</div>
+          <Badge label="人口趋势" color="#4ADE80" />
         </div>
         <div
           className={`dashboard__chart dashboard-chart ${selectedPanel === 'area' ? 'dashboard__chart--active' : ''}`}
@@ -408,7 +408,7 @@ export const Dashboard: React.FC = () => {
           onClick={() => handlePanelClick('area')}
         >
           <canvas ref={el => { canvasRefs.current['area-stack'] = el; }} />
-          <div className="dashboard__chart-badge">疆域面积</div>
+          <Badge label="疆域面积" color="#c9a96e" />
         </div>
       </div>
 
@@ -432,15 +432,16 @@ export const Dashboard: React.FC = () => {
       {/* 底部统计卡片 */}
       <div className="dashboard__stats">
         {FACTION_KEYS.filter(k => k !== 'other').map(key => {
-          const f = factions[key];
+          const f = factionById[key];
           const pop = (stats.population as Record<string, number>)[key] || 0;
           const mil = (stats.military as Record<string, number>)[key] || 0;
           const area = (stats.area as Record<string, number>)[key] || 0;
           if (pop === 0 && mil === 0 && area === 0) return null;
           return (
-            <div
+            <Card
               key={key}
-              className="dashboard__stat-card"
+              hover
+              hoverColor={f?.color}
               style={{ '--stat-color': f?.color, '--stat-bg': f?.bgColor } as React.CSSProperties}
             >
               <div className="dashboard__stat-name">{f?.name}</div>
@@ -458,7 +459,7 @@ export const Dashboard: React.FC = () => {
                   <span className="dashboard__stat-value">{area}<small>万km²</small></span>
                 </div>
               </div>
-            </div>
+            </Card>
           );
         })}
       </div>

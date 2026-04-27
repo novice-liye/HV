@@ -2,6 +2,7 @@ export interface ChatMessage {
   id: string;
   role: 'system' | 'user' | 'assistant';
   content: string;
+  reasoning?: string;
   timestamp: number;
   conversationId: string;
 }
@@ -116,12 +117,13 @@ export async function updateConversationTitle(id: string, title: string): Promis
 
 // ===== Message CRUD =====
 
-export async function addMessage(conversationId: string, role: ChatMessage['role'], content: string): Promise<ChatMessage> {
+export async function addMessage(conversationId: string, role: ChatMessage['role'], content: string, reasoning?: string): Promise<ChatMessage> {
   const db = await openDB();
   const msg: ChatMessage = {
     id: genId(),
     role,
     content,
+    reasoning,
     timestamp: Date.now(),
     conversationId,
   };

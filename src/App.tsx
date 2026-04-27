@@ -5,9 +5,7 @@ import { Timeline } from './components/timeline/Timeline';
 import { AISearchDemo } from './components/ai-search/AISearchDemo';
 import { RelationGraphDemo } from './components/relation-graph/RelationGraphDemo';
 import { TerritoryEvolution } from './components/territory/TerritoryEvolution';
-import { Dashboard } from './components/dashboard/Dashboard';
 import { PersonGallery } from './components/person-gallery/PersonGallery';
-import { BattleSandbox } from './components/battle-sandbox/BattleSandbox';
 import { WorksGallery } from './components/works/WorksGallery';
 import { AboutPage } from './components/about/AboutPage';
 import { ModuleNav } from './components/ModuleNav';
@@ -36,9 +34,7 @@ function App() {
         {route === 'ai-search' && <AISearchDemo />}
         {route === 'relation-graph' && <RelationGraphDemo />}
         {route === 'territory' && <TerritoryEvolution />}
-        {route === 'dashboard' && <Dashboard />}
         {route === 'person-gallery' && <PersonGallery />}
-        {route === 'battle-sandbox' && <BattleSandbox />}
         {route === 'works' && <WorksGallery />}
         {route === 'about' && <AboutPage />}
       </main>
@@ -76,35 +72,21 @@ function HomePage() {
       icon: '🗺️',
       title: '三国地图',
       desc: '交互式地图，支持疆域演变、地点详情、行军路线动画',
-      status: '新',
-    },
-    {
-      route: 'dashboard' as Route,
-      icon: '📊',
-      title: '数据仪表盘',
-      desc: '多维度数据统计，事件分类、兵力对比、人口趋势、疆域面积',
-      status: '新',
+      status: '已完成',
     },
     {
       route: 'person-gallery' as Route,
       icon: '👤',
       title: '人物图鉴',
       desc: '三国人物百科，按势力筛选、年份过滤，查看人物关系与相关事件',
-      status: '新',
-    },
-    {
-      route: 'battle-sandbox' as Route,
-      icon: '⚔️',
-      title: '战役沙盘',
-      desc: '三国经典战役回放，行军路线动画，参战势力与人物分析',
-      status: '新',
+      status: '已完成',
     },
     {
       route: 'works' as Route,
       icon: '📚',
       title: '著作',
       desc: '三国时期著名著作，涵盖兵法、文学、史学、思想、医学等领域',
-      status: '新',
+      status: '已完成',
     },
     {
       route: 'about' as Route,

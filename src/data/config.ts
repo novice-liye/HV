@@ -16,11 +16,11 @@ export const categoryConfig: Record<EventCategory, { label: string; icon: string
 
 export const timelineConfig: TimelineConfig = {
   minYear: 184,
-  maxYear: 280,
+  maxYear: 290,        // 延伸到290年，仅用于时间轴显示空间（事件数据仍到280年）
   defaultViewStart: 184,
-  defaultViewEnd: 280,
+  defaultViewEnd: 290,
   minViewRange: 5,    // 最小显示5年
-  maxViewRange: 120,  // 最大显示120年
+  maxViewRange: 130,  // 最大显示130年（含延伸区域）
   tracks: ['military', 'political', 'person', 'diplomacy', 'rebellion', 'construction', 'other'],
 };
 

@@ -7,28 +7,20 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { eventBus } from '../../core/EventBus';
 import { navigateToModule } from '../../core/navigation';
-import { persons, relationEdges } from '../../data/persons';
-import { events } from '../../data/events';
-import { factions } from '../../data/factions';
+import { PageHeader, SearchInput, FilterBar, Card, VirtualGrid } from '../ui';
+import {
+  persons, factions,
+  personsByFaction, searchPersons, getPersonRelations, getEventsForPerson,
+} from '../../data/cache';
 import type { FactionId, Person } from '../../types';
 
 const ALL_FACTIONS: FactionId[] = ['wei', 'shu', 'wu', 'han', 'other'];
 
-/** 获取人物相关事件 */
-function getPersonEvents(personId: string) {
-  return events.filter(e => e.persons.includes(personId));
-}
-
-/** 获取人物关系 */
-function getPersonRelations(personId: string) {
-  return relationEdges.filter(e => e.source === personId || e.target === personId);
-}
-
 /** 判断人物在指定年份是否在世 */
 function isPersonAlive(person: Person, year: number): boolean {
-  const birth = person.birthYear ?? 100;
-  const death = person.deathYear ?? 300;
-  return birth <= year && death >= year;
+  if (person.birthYear !== undefined && year < person.birthYear) return false;
+  if (person.deathYear !== undefined && year > person.deathYear) return false;
+  return true;
 }
 
 export const PersonGallery: React.FC = () => {
@@ -37,27 +29,28 @@ export const PersonGallery: React.FC = () => {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [searchText, setSearchText] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
+  const [containerHeight, setContainerHeight] = useState(window.innerHeight - 200);
 
-  // 筛选后的人物列表
+  // 监听窗口大小变化，动态调整容器高度
+  useEffect(() => {
+    const handleResize = () => setContainerHeight(window.innerHeight - 200);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // 筛选后的人物列表（使用缓存 searchPersons）
   const filteredPersons = useMemo(() => {
-    return persons.filter(p => {
+    const searched = searchPersons(searchText);
+    return searched.filter(p => {
       // 势力筛选
       if (filterFaction !== 'all' && p.faction !== filterFaction) return false;
       // 年份筛选：在世人物
       if (!isPersonAlive(p, filterYear)) return false;
-      // 搜索筛选
-      if (searchText) {
-        const q = searchText.toLowerCase();
-        const match = p.name.toLowerCase().includes(q)
-          || (p.title || '').toLowerCase().includes(q)
-          || p.id.toLowerCase().includes(q);
-        if (!match) return false;
-      }
       return true;
     });
   }, [filterFaction, filterYear, searchText]);
 
-  // 按势力分组
+  // 按势力分组（使用缓存 personsByFaction）
   const groupedPersons = useMemo(() => {
     const groups: Record<string, Person[]> = {};
     filteredPersons.forEach(p => {
@@ -67,11 +60,11 @@ export const PersonGallery: React.FC = () => {
     return groups;
   }, [filteredPersons]);
 
-  // 各势力在指定年份的在世人数
+  // 各势力在指定年份的在世人数（使用缓存 personsByFaction）
   const factionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     ALL_FACTIONS.forEach(f => {
-      counts[f] = persons.filter(p => p.faction === f && isPersonAlive(p, filterYear)).length;
+      counts[f] = (personsByFaction[f] || []).filter(p => isPersonAlive(p, filterYear)).length;
     });
     return counts;
   }, [filterYear]);
@@ -125,7 +118,7 @@ export const PersonGallery: React.FC = () => {
     setSelectedPerson(prev => prev?.id === person.id ? null : person);
     eventBus.emit('relation:focusNode', person.id, 'person-gallery');
     // 如果人物有地点信息，通知地图
-    const personEvents = getPersonEvents(person.id);
+    const personEvents = getEventsForPerson(person.id);
     if (personEvents.length > 0 && personEvents[0].location) {
       eventBus.emit('map:flyTo', personEvents[0].location.coordinate, 'person-gallery');
     }
@@ -150,58 +143,47 @@ export const PersonGallery: React.FC = () => {
 
   const selectedEvents = useMemo(() => {
     if (!selectedPerson) return [];
-    return getPersonEvents(selectedPerson.id);
+    return getEventsForPerson(selectedPerson.id);
   }, [selectedPerson]);
 
   return (
     <div className="person-gallery">
       {/* 头部 */}
-      <div className="person-gallery__header">
-        <h2 className="person-gallery__title">👤 人物图鉴</h2>
-        <p className="person-gallery__subtitle">
-          {filterYear}年 · 在世人物 {filteredPersons.length} 人 · 共收录 {persons.length} 位历史人物
-        </p>
-      </div>
+      <PageHeader
+        icon="👤"
+        title="人物图鉴"
+        subtitle={`${filterYear}年 · 在世人物 ${filteredPersons.length} 人 · 共收录 ${persons.length} 位历史人物`}
+      />
 
       {/* 控制栏 */}
       <div className="person-gallery__controls">
         {/* 势力筛选 */}
         <div className="person-gallery__filter-row">
-          <button
-            className={`person-gallery__filter-btn ${filterFaction === 'all' ? 'person-gallery__filter-btn--active' : ''}`}
-            onClick={() => setFilterFaction('all')}
-          >
-            全部 ({persons.filter(p => isPersonAlive(p, filterYear)).length})
-          </button>
-          {ALL_FACTIONS.map(f => {
-            const fac = factions[f];
-            if (!fac) return null;
-            const count = factionCounts[f] || 0;
-            if (count === 0) return null;
-            return (
-              <button
-                key={f}
-                className={`person-gallery__filter-btn ${filterFaction === f ? 'person-gallery__filter-btn--active' : ''}`}
-                style={{
-                  '--filter-color': fac.color,
-                  '--filter-bg': fac.bgColor,
-                } as React.CSSProperties}
-                onClick={() => setFilterFaction(f)}
-              >
-                {fac.name} ({count})
-              </button>
-            );
-          })}
+          <FilterBar
+            items={[
+              { key: 'all', label: `全部 (${persons.filter(p => isPersonAlive(p, filterYear)).length})` },
+              ...ALL_FACTIONS
+                .filter(f => {
+                  const fac = factions[f];
+                  return fac && (factionCounts[f] || 0) > 0;
+                })
+                .map(f => ({
+                  key: f,
+                  label: `${factions[f].name} (${factionCounts[f] || 0})`,
+                })),
+            ]}
+            activeKey={filterFaction}
+            onChange={(key) => setFilterFaction(key as FactionId | 'all')}
+          />
         </div>
 
         {/* 搜索 + 年份 */}
         <div className="person-gallery__search-row">
-          <input
-            type="text"
-            className="person-gallery__search-input"
-            placeholder="搜索人物姓名、头衔..."
+          <SearchInput
             value={searchText}
-            onChange={e => setSearchText(e.target.value)}
+            onChange={setSearchText}
+            placeholder="搜索人物姓名、头衔..."
+            width="100%"
           />
           <div className="person-gallery__year-control">
             <span className="person-gallery__year-label">100</span>
@@ -228,6 +210,9 @@ export const PersonGallery: React.FC = () => {
         ) : (
           Object.entries(groupedPersons).map(([factionId, group]) => {
             const fac = factions[factionId];
+            // 每组使用 VirtualGrid 虚拟化渲染，限制 DOM 节点数
+            const groupContentHeight = group.length * 80 + (group.length - 1) * 8 + 16;
+            const gridHeight = Math.min(containerHeight, groupContentHeight);
             return (
               <div key={factionId} className="person-gallery__group">
                 <div
@@ -236,24 +221,25 @@ export const PersonGallery: React.FC = () => {
                 >
                   {fac?.name || factionId}
                 </div>
-                <div className="person-gallery__cards">
-                  {group.map(person => {
+                <VirtualGrid<Person>
+                  items={group}
+                  renderItem={(person) => {
                     const isSelected = selectedPerson?.id === person.id;
-                    const age = filterYear - (person.birthYear ?? 0);
-                    const isDead = (person.deathYear ?? 300) < filterYear;
+                    const age = person.birthYear ? filterYear - person.birthYear : null;
+                    const isDead = person.deathYear !== undefined && person.deathYear < filterYear;
                     return (
-                      <div
-                        key={person.id}
-                        className={`person-gallery__card ${isSelected ? 'person-gallery__card--selected' : ''} ${isDead ? 'person-gallery__card--deceased' : ''}`}
+                      <Card
+                        onClick={() => handleSelectPerson(person)}
+                        hover
+                        hoverColor={fac?.color}
                         style={{
                           '--card-color': fac?.color,
                           '--card-bg': fac?.bgColor,
+                          opacity: isDead ? 0.5 : 1,
+                          border: isSelected ? `1px solid ${fac?.color}66` : undefined,
+                          height: '100%',
+                          boxSizing: 'border-box',
                         } as React.CSSProperties}
-                        onClick={() => handleSelectPerson(person)}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${person.name}，${fac?.name}，${person.title || ''}`}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSelectPerson(person); }}
                       >
                         <div className="person-gallery__card-avatar">
                           {person.name.charAt(0)}
@@ -263,16 +249,20 @@ export const PersonGallery: React.FC = () => {
                           <div className="person-gallery__card-title">{person.title || '—'}</div>
                           <div className="person-gallery__card-years">
                             {person.birthYear ?? '?'}—{person.deathYear ?? '?'}
-                            {!isDead && <span className="person-gallery__card-age">· {age}岁</span>}
+                            {!isDead && age !== null && age >= 0 && <span className="person-gallery__card-age">· {age}岁</span>}
                           </div>
                         </div>
                         {isSelected && (
                           <div className="person-gallery__card-check">✓</div>
                         )}
-                      </div>
+                      </Card>
                     );
-                  })}
-                </div>
+                  }}
+                  itemHeight={80}
+                  columns={3}
+                  gap={8}
+                  containerHeight={gridHeight}
+                />
               </div>
             );
           })

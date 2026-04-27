@@ -1505,13 +1505,6 @@ export const events: HistoricalEvent[] = [
     sources: [
       { book: '三国志', chapter: '魏书·吕布传', text: '布以矛刺中……布遂杀汜', type: 'history' },
     ],
-    mapAnimation: {
-      type: 'battle',
-      path: [{lat:34.8,lng:113.3}],
-      duration: 2500,
-      color: '#9CA3AF',
-      label: '三英战吕布',
-    },
     tags: ['军事', '吕布', '虎牢关'],
     relatedEvents: ['evt-003'],
   },
@@ -1965,13 +1958,6 @@ export const events: HistoricalEvent[] = [
       duration: 2000,
       color: '#8B5CF6',
       label: '淮南一叛',
-    },
-    mapAnimation: {
-      type: 'rebellion',
-      path: [{lat:32.5,lng:116.8}],
-      duration: 2000,
-      color: '#8B5CF6',
-      label: '淮南二叛',
     },
     tags: ['叛乱', '司马氏', '淮南'],
     sources: [
@@ -2522,7 +2508,7 @@ export const events: HistoricalEvent[] = [
       duration: 3000,
       color: '#D94A4A',
       label: '火烧上方谷',
-      effect: 'fire',
+      meta: { effect: 'fire' },
     },
     sources: [
       { book: '晋书', chapter: '宣帝纪', text: '亮围祁山……帝使部将救之', type: 'history' },

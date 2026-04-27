@@ -18,6 +18,7 @@ interface TimelineTracksProps {
   activeFaction: string | null; // 当前筛选的势力 ID
   onSelectEvent: (event: HistoricalEvent) => void;
   onHoverEvent: (event: HistoricalEvent | null) => void;
+  hasDragged: boolean; // 是否在拖拽中（用于阻止事件条 onClick 误触发）
 }
 
 const TRACK_GAP = 6;
@@ -35,6 +36,7 @@ export const TimelineTracks: React.FC<TimelineTracksProps> = React.memo(({
   activeFaction,
   onSelectEvent,
   onHoverEvent,
+  hasDragged,
 }) => {
   const containerRef = useRef<HTMLDivElement>( null);
 
@@ -132,6 +134,7 @@ export const TimelineTracks: React.FC<TimelineTracksProps> = React.memo(({
     <div
       ref={containerRef}
       className="timeline-tracks"
+      data-has-highlight={hoveredEvent ? 'true' : undefined}
       style={{ width, height: trackLayout.totalHeight, position: 'relative' }}
     >
       {trackLayout.layout.map(track => {
@@ -199,6 +202,7 @@ export const TimelineTracks: React.FC<TimelineTracksProps> = React.memo(({
                     activeFaction={activeFaction}
                     onSelect={onSelectEvent}
                     onHover={onHoverEvent}
+                    hasDragged={hasDragged}
                   />
                 );
               })

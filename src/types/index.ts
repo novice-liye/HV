@@ -50,7 +50,7 @@ export interface EventSource {
   /** 原文引用（简短） */
   text: string;
   /** 来源类型：正史/演义/其他 */
-  type?: 'history' | 'fiction' | 'other';
+  type?: 'history' | 'fiction' | 'novel' | 'other';
 }
 
 /** 历史事件 - 核心数据结构 */
@@ -88,7 +88,7 @@ export interface HistoricalEvent {
 
 /** 地图动画配置 */
 export interface MapAnimationConfig {
-  type: 'march' | 'battle' | 'siege' | 'expansion' | 'retreat';
+  type?: string;
   /** 动画路径点（单阶段动画使用） */
   path: GeoCoordinate[];
   /** 动画持续时间（毫秒） */

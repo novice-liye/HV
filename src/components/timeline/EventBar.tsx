@@ -20,6 +20,7 @@ interface EventBarProps {
   activeFaction: string | null; // 当前筛选的势力 ID，null 表示未筛选
   onSelect: (event: HistoricalEvent) => void;
   onHover: (event: HistoricalEvent | null) => void;
+  hasDragged: boolean; // 是否在拖拽中（用于阻止 onClick 误触发）
 }
 
 export const EventBar: React.FC<EventBarProps> = React.memo(({
@@ -32,6 +33,7 @@ export const EventBar: React.FC<EventBarProps> = React.memo(({
   activeFaction,
   onSelect,
   onHover,
+  hasDragged,
 }: EventBarProps) => {
   const barRef = useRef<HTMLDivElement>(null);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -46,8 +48,9 @@ export const EventBar: React.FC<EventBarProps> = React.memo(({
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    if (hasDragged) return; // 拖拽中不触发点击
     onSelect(event);
-  }, [event, onSelect]);
+  }, [event, onSelect, hasDragged]);
 
   const handleMouseEnter = useCallback((e: React.MouseEvent) => {
     onHover(event);
@@ -64,6 +67,11 @@ export const EventBar: React.FC<EventBarProps> = React.memo(({
     setShowTooltip(false);
   }, [onHover]);
 
+  // 事件年份文本
+  const yearText = event.startYear === event.endYear
+    ? `${event.startYear}年`
+    : `${event.startYear}-${event.endYear}年`;
+
   // 事件太短时显示为圆点 + 标签
   const isPoint = width < 20;
   // 判断条形内是否能放下完整标题（估算：每个中文字约11px + icon 14px + padding 8px）
@@ -79,7 +87,7 @@ export const EventBar: React.FC<EventBarProps> = React.memo(({
         role="button"
         tabIndex={0}
         aria-label={`${event.title} (${event.startYear}${event.startYear !== event.endYear ? '-' + event.endYear : ''}年)`}
-        className={`event-bar ${isSelected ? 'event-bar--selected' : ''} ${isHovered ? 'event-bar--hovered' : ''}`}
+        className={`event-bar ${isSelected ? 'event-bar--selected' : ''} ${isHovered ? 'event-bar--highlighted' : ''}`}
         style={{
           position: 'absolute',
           left: barLeft,
@@ -88,18 +96,20 @@ export const EventBar: React.FC<EventBarProps> = React.memo(({
           height: importance.height,
           backgroundColor: displayFaction.color,
           borderColor: displayFaction.color,
-          zIndex: importance.zIndex + (isHovered ? 100 : 0) + (isSelected ? 200 : 0),
+          zIndex: importance.zIndex + (isHovered ? 200 : 0) + (isSelected ? 100 : 0),
           borderRadius: isPoint ? '50%' : '3px',
           cursor: 'pointer',
-          transition: 'transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease',
-          opacity: isHovered || isSelected ? 1 : 0.85,
-          transform: isHovered || isSelected ? 'scaleY(1.15)' : 'scaleY(1)',
-          boxShadow: isSelected
-            ? `0 0 12px ${displayFaction.color}, 0 0 4px ${displayFaction.color}`
-            : isHovered
-              ? `0 0 8px ${displayFaction.color}80`
+          transition: 'transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, filter 0.2s ease',
+          opacity: isHovered || isSelected ? 1 : undefined,
+          transform: isHovered ? 'scaleY(1.4)' : isSelected ? 'scaleY(1.15)' : 'scaleY(1)',
+          boxShadow: isHovered
+            ? `0 0 0 2px #fff, 0 0 16px ${displayFaction.color}, 0 0 32px ${displayFaction.color}88`
+            : isSelected
+              ? `0 0 12px ${displayFaction.color}, 0 0 4px ${displayFaction.color}`
               : 'none',
-        }}
+          filter: isHovered ? 'brightness(1.3)' : undefined,
+          '--pulse-color': displayFaction.color,
+        } as React.CSSProperties}
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -123,6 +133,7 @@ export const EventBar: React.FC<EventBarProps> = React.memo(({
               maxWidth: width - 8,
             }}
           >
+            <span style={{ opacity: 0.7, marginRight: 3, fontSize: 10 }}>{yearText}</span>
             {event.title}
           </span>
         )}
@@ -149,19 +160,20 @@ export const EventBar: React.FC<EventBarProps> = React.memo(({
           }}
         >
           <span style={{ marginRight: 3, fontSize: 10 }}>{category.icon}</span>
+          <span style={{ color: 'var(--color-gold)', marginRight: 3, fontSize: 10, opacity: 0.8 }}>{yearText}</span>
           {event.title}
         </div>
       )}
 
       {/* 悬浮提示 */}
-      {showTooltip && !isSelected && (
+      {(showTooltip || isHovered) && !isSelected && (
         <div
           className="event-tooltip"
           style={{
-            position: 'fixed',
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            transform: 'translate(-50%, -100%)',
+            position: showTooltip ? 'fixed' : 'absolute',
+            left: showTooltip ? tooltipPos.x : '50%',
+            top: showTooltip ? tooltipPos.y : 0,
+            transform: showTooltip ? 'translate(-50%, -100%)' : 'translate(-50%, -100%) translateY(-4px)',
             zIndex: 10000,
             pointerEvents: 'none',
           }}
