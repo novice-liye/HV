@@ -1,6 +1,8 @@
-# 三国历史可视化平台
+# 三国历史可视化
 
 > 一个多维度、可交互的三国历史（184-280年）综合可视化 Web 应用
+
+**在线访问：[https://novice-liye.github.io/HV/](https://novice-liye.github.io/HV/)**
 
 ## ✨ 功能概览
 
