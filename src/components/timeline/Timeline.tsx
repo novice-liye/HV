@@ -8,6 +8,7 @@ import { useTimeline } from '../../hooks/useTimeline';
 import { TimelineAxis } from './TimelineAxis';
 import { TimelineTracks } from './TimelineTracks';
 import { TimelineControls } from './TimelineControls';
+import { VerticalTimeline } from './VerticalTimeline';
 import { DetailPanel } from '../detail-panel/DetailPanel';
 import { events } from '../../data/events';
 import { timelineConfig } from '../../data/config';
@@ -17,6 +18,7 @@ export const Timeline: React.FC = () => {
   const tracksScrollRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const {
     viewState,
@@ -60,6 +62,13 @@ export const Timeline: React.FC = () => {
 
     observer.observe(container);
     return () => observer.disconnect();
+  }, []);
+
+  // 监听屏幕宽度变化，切换水平/竖向时间线
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   // ============================================================
@@ -137,6 +146,30 @@ export const Timeline: React.FC = () => {
       }, 300);
     }
   }, [panTo, hoverEvent, clearFilters]);
+
+  // 移动端：使用竖向时间线
+  if (isMobile) {
+    return (
+      <div className="timeline-root timeline-root--mobile">
+        <VerticalTimeline
+          events={events}
+          selectedEvent={selectedEvent}
+          onSelectEvent={selectEvent}
+          activeCategories={filters.categories}
+          activeFactions={filters.factions}
+          onToggleCategory={toggleCategory}
+          onToggleFaction={toggleFaction}
+          clearFilters={clearFilters}
+        />
+        {selectedEvent && (
+          <DetailPanel
+            event={selectedEvent}
+            onClose={() => selectEvent(null)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="timeline-root" tabIndex={0} onKeyDown={handleKeyDown}>

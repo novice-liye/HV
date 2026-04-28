@@ -3912,6 +3912,10 @@ body::before {
   }
 
   /* ---- 时间线模块 ---- */
+  .timeline-root--mobile {
+    flex-direction: column;
+  }
+
   .timeline-root {
     flex-direction: column;
   }
@@ -4293,6 +4297,275 @@ body::before {
   .territory-evolution__stats {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+   竖向时间线（移动端）
+   ============================================================ */
+
+.vtl-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+}
+
+.vtl-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+.vtl-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vtl-toolbar__count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.vtl-toolbar__btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.vtl-toolbar__btn--clear {
+  color: var(--color-gold);
+  border-color: rgba(201, 169, 110, 0.3);
+}
+
+.vtl-filters {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.vtl-filters__section {
+  margin-bottom: 8px;
+}
+
+.vtl-filters__section:last-child {
+  margin-bottom: 0;
+}
+
+.vtl-filters__label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.vtl-filters__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.vtl-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.vtl-filter-tag--active {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vtl-filter-tag__count {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+}
+
+.vtl-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0 20px 0;
+}
+
+.vtl-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.vtl-year-group {
+  position: relative;
+  padding-left: 20px;
+}
+
+.vtl-year-marker {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vtl-year-marker__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-gold);
+  flex-shrink: 0;
+  margin-top: 6px;
+  box-shadow: 0 0 6px rgba(201, 169, 110, 0.4);
+}
+
+.vtl-year-marker__line {
+  width: 1px;
+  flex: 1;
+  background: linear-gradient(to bottom, var(--color-gold-dark), transparent);
+  opacity: 0.3;
+}
+
+.vtl-year-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-gold);
+  padding: 4px 0 2px 0;
+  letter-spacing: 1px;
+  font-family: var(--font-display, serif);
+}
+
+.vtl-events {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.vtl-event {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 0 8px 0 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.vtl-event:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vtl-event--selected {
+  border-color: var(--color-gold);
+  background: rgba(201, 169, 110, 0.08);
+  box-shadow: 0 0 8px rgba(201, 169, 110, 0.15);
+}
+
+.vtl-event__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.vtl-event__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.vtl-event__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.vtl-event__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.vtl-event__duration {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.vtl-event__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.vtl-event__cat {
+  font-size: 10px;
+}
+
+.vtl-event__faction {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.vtl-event__importance {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(231, 76, 60, 0.15);
+  color: #E74C3C;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.vtl-event__desc {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vtl-event__persons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.vtl-event__person {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-muted);
 }
 
 /* 叙事气泡动画 */
