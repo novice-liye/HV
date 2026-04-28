@@ -29,11 +29,11 @@ export const PersonGallery: React.FC = () => {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [searchText, setSearchText] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
-  const [containerHeight, setContainerHeight] = useState(window.innerHeight - 200);
+  const [containerHeight, setContainerHeight] = useState(window.innerHeight - (window.innerWidth < 768 ? 160 : 200));
 
   // 监听窗口大小变化，动态调整容器高度
   useEffect(() => {
-    const handleResize = () => setContainerHeight(window.innerHeight - 200);
+    const handleResize = () => setContainerHeight(window.innerHeight - (window.innerWidth < 768 ? 160 : 200));
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -260,6 +260,7 @@ export const PersonGallery: React.FC = () => {
                   }}
                   itemHeight={80}
                   columns={3}
+                  minColumnWidth={140}
                   gap={8}
                   containerHeight={gridHeight}
                 />

@@ -16,11 +16,11 @@ const types = [
 export function WorksGallery() {
   const [filterType, setFilterType] = useState<Work['type'] | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [containerHeight, setContainerHeight] = useState(() => window.innerHeight - 200);
+  const [containerHeight, setContainerHeight] = useState(() => window.innerHeight - (window.innerWidth < 768 ? 160 : 200));
   const [selectedWork, setSelectedWork] = useState<Work | null>(null);
 
   useEffect(() => {
-    const handleResize = () => setContainerHeight(window.innerHeight - 200);
+    const handleResize = () => setContainerHeight(window.innerHeight - (window.innerWidth < 768 ? 160 : 200));
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -66,7 +66,7 @@ export function WorksGallery() {
   }, []);
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: window.innerWidth < 768 ? '10px' : '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <PageHeader
         icon="📚"
         title="三国时期著名著作"
@@ -131,6 +131,7 @@ export function WorksGallery() {
           )}
           itemHeight={220}
           columns={2}
+          minColumnWidth={240}
           gap={16}
           containerHeight={containerHeight}
         />
@@ -167,7 +168,7 @@ export function WorksGallery() {
               width: '90%',
               maxHeight: '85vh',
               overflowY: 'auto',
-              padding: '32px',
+              padding: window.innerWidth < 768 ? '20px' : '32px',
               boxShadow: '0 24px 80px rgba(0,0,0,0.6), 0 0 40px rgba(201,169,110,0.08)',
               position: 'relative',
             }}

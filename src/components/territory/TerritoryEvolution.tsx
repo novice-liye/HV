@@ -926,7 +926,7 @@ export const TerritoryEvolution: React.FC = () => {
               padding: '10px 14px',
               border: '1px solid rgba(201, 169, 110, 0.3)',
               backdropFilter: 'blur(4px)',
-              maxWidth: '320px',
+              maxWidth: window.innerWidth < 768 ? '260px' : '320px',
               maxHeight: 'calc(100% - 80px)',
               overflowY: 'auto',
             }}>

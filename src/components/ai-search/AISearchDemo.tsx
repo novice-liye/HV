@@ -26,7 +26,7 @@ export function AISearchDemo() {
   const [webSearch, setWebSearch] = useState(false);
   const [showSidebar, setShowSidebar] = useState(window.innerWidth > 768);
   const [error, setError] = useState<string | null>(null);
-  const [chatAreaHeight, setChatAreaHeight] = useState(() => window.innerHeight - 300);
+  const [chatAreaHeight, setChatAreaHeight] = useState(() => window.innerHeight - (window.innerWidth < 768 ? 200 : 300));
 
   const displayMessages = useMemo(() => {
     return messages.filter(m => !m.id.startsWith('streaming-') || m.content || m.reasoning);
@@ -278,7 +278,7 @@ export function AISearchDemo() {
       {/* Sidebar */}
       {showSidebar && (
         <div style={{
-          width: '260px', minWidth: '260px',
+          width: window.innerWidth < 768 ? '200px' : '260px', minWidth: window.innerWidth < 768 ? '200px' : '260px',
           borderRight: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', flexDirection: 'column',
           background: 'rgba(0,0,0,0.2)',
@@ -333,8 +333,9 @@ export function AISearchDemo() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Header */}
         <div style={{
-          padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+          padding: window.innerWidth < 768 ? '8px 12px' : '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexWrap: window.innerWidth < 768 ? 'wrap' : 'nowrap', gap: '8px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button onClick={() => setShowSidebar(!showSidebar)} style={{
@@ -409,8 +410,8 @@ export function AISearchDemo() {
         {/* Messages */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {messages.length === 0 && (
-            <div style={{ flex: 1, textAlign: 'center', padding: '80px 20px', overflowY: 'auto' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏛️</div>
+            <div style={{ flex: 1, textAlign: 'center', padding: window.innerWidth < 768 ? '40px 16px' : '80px 20px', overflowY: 'auto' }}>
+              <div style={{ fontSize: window.innerWidth < 768 ? '36px' : '48px', marginBottom: '16px' }}>🏛️</div>
               <h3 style={{ color: '#e8e0d0', marginBottom: '8px' }}>三国历史 AI 助手</h3>
               <p style={{ color: 'rgba(232,224,208,0.4)', fontSize: '14px', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>
                 基于 DeepSeek 大模型，内置三国历史知识库。<br />
@@ -430,7 +431,7 @@ export function AISearchDemo() {
           )}
           {messages.length > 0 && (
             <div style={{
-              flex: 1, padding: '20px', overflowY: 'auto',
+              flex: 1, padding: window.innerWidth < 768 ? '12px' : '20px', overflowY: 'auto',
               maxHeight: chatAreaHeight,
             }}>
               {displayMessages.map((msg) => (
@@ -466,7 +467,7 @@ export function AISearchDemo() {
                           fontSize: '13px', color: 'rgba(232,224,208,0.4)',
                           lineHeight: 1.6,
                           whiteSpace: 'pre-wrap',
-                          maxHeight: '200px',
+                          maxHeight: window.innerWidth < 768 ? '120px' : '200px',
                           overflowY: 'auto',
                         }}>
                           {msg.reasoning}

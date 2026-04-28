@@ -1,10 +1,11 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 
 interface VirtualGridProps<T> {
   items: T[];
   renderItem: (item: T, index: number) => React.ReactNode;
   itemHeight: number;
-  columns: number;
+  columns?: number;
+  minColumnWidth?: number;
   gap: number;
   containerHeight: number;
   overscan?: number;
@@ -12,10 +13,33 @@ interface VirtualGridProps<T> {
   style?: React.CSSProperties;
 }
 
-export function VirtualGrid<T>({ items, renderItem, itemHeight, columns, gap, containerHeight, overscan = 2, className, style }: VirtualGridProps<T>) {
+export function VirtualGrid<T>({
+  items, renderItem, itemHeight, columns: columnsProp, minColumnWidth, gap, containerHeight,
+  overscan = 2, className, style,
+}: VirtualGridProps<T>) {
   const [scrollTop, setScrollTop] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [resolvedColumns, setResolvedColumns] = useState(columnsProp || 1);
 
+  // 根据容器宽度动态计算列数
+  useEffect(() => {
+    if (!minColumnWidth || !containerRef.current) {
+      if (columnsProp) setResolvedColumns(columnsProp);
+      return;
+    }
+    const updateColumns = () => {
+      if (!containerRef.current) return;
+      const w = containerRef.current.clientWidth;
+      const cols = Math.max(1, Math.floor((w + gap) / (minColumnWidth + gap)));
+      setResolvedColumns(columnsProp ? Math.min(columnsProp, cols) : cols);
+    };
+    updateColumns();
+    const observer = new ResizeObserver(updateColumns);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [columnsProp, minColumnWidth, gap]);
+
+  const columns = resolvedColumns;
   const rowHeight = itemHeight + gap;
   const totalRows = Math.ceil(items.length / columns);
   const totalHeight = totalRows * rowHeight;

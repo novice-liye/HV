@@ -330,7 +330,7 @@ export const RelationGraphDemo: React.FC = () => {
         y: cy + Math.sin(angle) * r - cy,
         vx: 0,
         vy: 0,
-        radius: n.type === 'faction' ? 30 : 18,
+        radius: n.type === 'faction' ? (window.innerWidth < 768 ? 22 : 30) : (window.innerWidth < 768 ? 12 : 18),
         isHighlighted: false,
         isFocused: false,
       };
@@ -793,7 +793,7 @@ export const RelationGraphDemo: React.FC = () => {
               padding: '4px 10px',
               color: '#e8e0d0',
               fontSize: '12px',
-              width: '140px',
+              width: window.innerWidth < 768 ? '100px' : '140px',
               outline: 'none',
             }}
           />
@@ -879,7 +879,7 @@ export const RelationGraphDemo: React.FC = () => {
             onBlur={() => setTimeout(() => setShowPathResultsA(false), 300)}
             style={{
               background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,169,110,0.2)',
-              borderRadius: '4px', padding: '3px 8px', color: '#e8e0d0', fontSize: '12px', width: '100px', outline: 'none',
+              borderRadius: '4px', padding: '3px 8px', color: '#e8e0d0', fontSize: '12px', width: window.innerWidth < 768 ? '80px' : '100px', outline: 'none',
             }}
           />
           {showPathResultsA && (
@@ -907,7 +907,7 @@ export const RelationGraphDemo: React.FC = () => {
             onBlur={() => setTimeout(() => setShowPathResultsB(false), 300)}
             style={{
               background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,169,110,0.2)',
-              borderRadius: '4px', padding: '3px 8px', color: '#e8e0d0', fontSize: '12px', width: '100px', outline: 'none',
+              borderRadius: '4px', padding: '3px 8px', color: '#e8e0d0', fontSize: '12px', width: window.innerWidth < 768 ? '80px' : '100px', outline: 'none',
             }}
           />
           {showPathResultsB && (

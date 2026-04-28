@@ -4051,20 +4051,24 @@ body::before {
     flex-direction: column;
   }
 
+  .battle-sandbox__map-container {
+    height: 280px;
+  }
+
   .battle-sandbox__sidebar {
     width: 100%;
     max-height: 200px;
     overflow-y: auto;
   }
 
-  .battle-sandbox__battle-list {
+  .battle-sandbox__list {
     display: flex;
     overflow-x: auto;
     gap: var(--space-sm);
     padding-bottom: var(--space-sm);
   }
 
-  .battle-sandbox__battle-item {
+  .battle-sandbox__item {
     min-width: 120px;
     flex-shrink: 0;
   }
@@ -4075,7 +4079,8 @@ body::before {
   }
 
   .dashboard__chart {
-    min-height: 200px;
+    min-height: 160px;
+    height: auto;
   }
 
   .dashboard__stats {
