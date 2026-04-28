@@ -24,7 +24,7 @@ export function AISearchDemo() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(window.innerWidth > 768);
   const [error, setError] = useState<string | null>(null);
   const [chatAreaHeight, setChatAreaHeight] = useState(() => window.innerHeight - 300);
 

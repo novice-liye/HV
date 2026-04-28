@@ -79,6 +79,7 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* 背景纹理 */
@@ -1123,12 +1124,15 @@ body::before {
   flex-direction: column;
   width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
 .app-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   position: relative;
   padding-top: 40px; /* 为 fixed 导航栏留出空间 */
 }
@@ -4106,16 +4110,47 @@ body::before {
   }
 
   /* ---- 首页 ---- */
+  .home-page {
+    justify-content: flex-start;
+    padding: var(--space-md);
+    padding-top: calc(var(--space-md) + 40px);
+    gap: var(--space-lg);
+  }
+
+  .home-hero__title {
+    font-size: 24px;
+    letter-spacing: 4px;
+  }
+
+  .home-hero__subtitle {
+    font-size: 12px;
+  }
+
   .home-modules {
     grid-template-columns: 1fr;
+    gap: var(--space-sm);
+    max-width: 100%;
   }
 
   .home-module-card {
-    padding: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+  }
+
+  .home-module-card__icon {
+    font-size: 24px;
   }
 
   .home-module-card__title {
-    font-size: 16px;
+    font-size: 14px;
+  }
+
+  .home-module-card__desc {
+    font-size: 11px;
+  }
+
+  .home-footer {
+    font-size: 10px;
   }
 
   /* ---- AI搜索 ---- */
@@ -4126,6 +4161,117 @@ body::before {
 
   .ai-search-demo__quick-tags {
     flex-wrap: wrap;
+  }
+
+  .ai-search-demo__messages {
+    padding: var(--space-sm);
+  }
+
+  .ai-search-demo__msg-card {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .ai-search-demo__msg-card-inner {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .ai-search-demo__detail-hint {
+    font-size: 10px;
+  }
+
+  /* ---- 著作模块 ---- */
+  .works-page {
+    padding: var(--space-sm);
+  }
+
+  .works-page__header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .works-page__title {
+    font-size: 16px;
+  }
+
+  /* ---- 关于页面 ---- */
+  .about-page {
+    padding: var(--space-sm);
+  }
+
+  .about-page__content {
+    padding: var(--space-sm);
+    font-size: 13px;
+  }
+
+  /* ---- 通用 ---- */
+  .app-content {
+    padding-top: 36px;
+  }
+
+  /* ---- 关系图 ---- */
+  .relation-graph-demo__toolbar {
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .relation-graph-demo__title {
+    font-size: 14px;
+  }
+
+  .relation-graph-demo__filter-inline {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+
+  .relation-graph-demo__filter-btn {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .relation-graph-demo__path-search {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .relation-graph-demo__path-input {
+    width: 100%;
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+
+  .relation-graph-demo__path-label {
+    font-size: 11px;
+  }
+
+  .relation-graph-demo__legend-inline {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .relation-graph-demo__legend-item {
+    font-size: 10px;
+  }
+
+  .relation-graph-demo__detail {
+    width: 100vw;
+    max-height: 80vh;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .relation-graph-demo__detail-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .relation-graph-demo__detail-name {
+    font-size: 16px;
+  }
+
+  .relation-graph-demo__detail-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
   }
 }
 
