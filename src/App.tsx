@@ -7,6 +7,7 @@ import { RelationGraphDemo } from './components/relation-graph/RelationGraphDemo
 import { TerritoryEvolution } from './components/territory/TerritoryEvolution';
 import { PersonGallery } from './components/person-gallery/PersonGallery';
 import { WorksGallery } from './components/works/WorksGallery';
+import { NovelReader } from './components/novel-reader/NovelReader';
 import { AboutPage } from './components/about/AboutPage';
 import { ModuleNav } from './components/ModuleNav';
 import { useEffect } from 'react';
@@ -36,6 +37,7 @@ function App() {
         {route === 'territory' && <TerritoryEvolution />}
         {route === 'person-gallery' && <PersonGallery />}
         {route === 'works' && <WorksGallery />}
+        {route === 'novel-reader' && <NovelReader />}
         {route === 'about' && <AboutPage />}
       </main>
     </div>
@@ -87,6 +89,13 @@ function HomePage() {
       title: '著作',
       desc: '三国时期著名著作，涵盖兵法、文学、史学、思想、医学等领域',
       status: '已完成',
+    },
+    {
+      route: 'novel-reader' as Route,
+      icon: '📖',
+      title: '小说阅读器',
+      desc: '上传小说文件，按章节拆分，支持全文搜索和点击跳转',
+      status: '新',
     },
     {
       route: 'about' as Route,

@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-export type Route = 'home' | 'timeline' | 'map' | 'ai-search' | 'relation-graph' | 'territory' | 'dashboard' | 'person-gallery' | 'battle-sandbox' | 'works' | 'about';
+export type Route = 'home' | 'timeline' | 'map' | 'ai-search' | 'relation-graph' | 'territory' | 'dashboard' | 'person-gallery' | 'battle-sandbox' | 'works' | 'novel-reader' | 'about';
 
 const routeMap: Record<string, Route> = {
   '': 'home',
@@ -17,6 +17,7 @@ const routeMap: Record<string, Route> = {
   '#person-gallery': 'person-gallery',
   '#battle-sandbox': 'battle-sandbox',
   '#works': 'works',
+  '#novel-reader': 'novel-reader',
   '#about': 'about',
 };
 
@@ -31,6 +32,7 @@ const reverseMap: Record<Route, string> = {
   'person-gallery': '#person-gallery',
   'battle-sandbox': '#battle-sandbox',
   'works': '#works',
+  'novel-reader': '#novel-reader',
   'about': '#about',
 };
 

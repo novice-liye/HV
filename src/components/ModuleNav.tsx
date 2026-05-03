@@ -13,6 +13,7 @@ const navItems: { route: Route; label: string; icon: string }[] = [
   { route: 'relation-graph', label: '关系图', icon: '🕸️' },
   { route: 'territory', label: '地图', icon: '🗺️' },
   { route: 'works', label: '著作', icon: '📚' },
+  { route: 'novel-reader', label: '小说', icon: '📖' },
   { route: 'person-gallery', label: '人物', icon: '👤' },
   { route: 'about', label: '关于', icon: 'ℹ️' },
 ];
