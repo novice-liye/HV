@@ -203,7 +203,7 @@ export const Timeline: React.FC = () => {
       <div className="timeline-main">
         {/* 标题栏 */}
         <div className="timeline-header">
-          <h1 className="timeline-title">三国历史时间线</h1>
+          <h1 className="timeline-title">三国演义小说时间线</h1>
           <span className="timeline-subtitle">
             公元 {timelineConfig.minYear} — 280 年
           </span>

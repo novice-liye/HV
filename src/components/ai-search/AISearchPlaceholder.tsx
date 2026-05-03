@@ -34,7 +34,7 @@ export const AISearchPlaceholder: React.FC = () => {
         <input
           type="text"
           className="ai-search-box__input"
-          placeholder="搜索三国历史..."
+          placeholder="搜索三国演义小说..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}

@@ -50,14 +50,14 @@ function HomePage() {
       route: 'timeline' as Route,
       icon: '📜',
       title: '时间线',
-      desc: '三国历史时间线，支持缩放、平移、事件筛选和详情查看',
+      desc: '三国演义小说时间线，支持缩放、平移、事件筛选和详情查看',
       status: '已完成',
     },
     {
       route: 'ai-search' as Route,
       icon: '🔍',
       title: 'AI 搜索',
-      desc: '智能搜索三国历史人物、事件、地点',
+      desc: '智能搜索三国演义小说人物、事件、地点',
       status: 'Demo',
     },
     {
@@ -100,7 +100,7 @@ function HomePage() {
   return (
     <div className="home-page">
       <div className="home-hero">
-        <h1 className="home-hero__title">三国历史可视化</h1>
+        <h1 className="home-hero__title">三国演义小说可视化</h1>
         <p className="home-hero__subtitle">
           多维度展示三国时期（184—280 AD）的历史脉络
         </p>

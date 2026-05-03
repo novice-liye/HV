@@ -14,7 +14,7 @@ export function AboutPage() {
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           lineHeight: 1.4,
         }}>
-          三国历史可视化
+          三国演义小说可视化
         </h1>
         <p style={{
           fontSize: '15px', color: 'rgba(232,224,208,0.4)', margin: 0,
@@ -54,7 +54,7 @@ export function AboutPage() {
 
         {/* 项目简介 */}
         <Section title="📋 项目简介">
-          <p>本项目是一个交互式三国历史可视化平台，涵盖时间线、地图疆域演变、人物关系图谱、AI智能问答等多个维度，旨在通过可视化手段让用户直观理解三国时期的历史脉络。</p>
+          <p>本项目是一个交互式三国演义小说可视化平台，涵盖时间线、地图疆域演变、人物关系图谱、AI智能问答等多个维度，旨在通过可视化手段让用户直观理解三国时期的历史脉络。</p>
           <p>项目采用纯前端架构，所有历史数据内置于代码中，无需后端服务即可运行。支持 PC 端和移动端访问。</p>
         </Section>
 

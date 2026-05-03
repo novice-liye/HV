@@ -412,7 +412,7 @@ export function AISearchDemo() {
           {messages.length === 0 && (
             <div style={{ flex: 1, textAlign: 'center', padding: window.innerWidth < 768 ? '40px 16px' : '80px 20px', overflowY: 'auto' }}>
               <div style={{ fontSize: window.innerWidth < 768 ? '36px' : '48px', marginBottom: '16px' }}>🏛️</div>
-              <h3 style={{ color: '#e8e0d0', marginBottom: '8px' }}>三国历史 AI 助手</h3>
+              <h3 style={{ color: '#e8e0d0', marginBottom: '8px' }}>三国演义小说 AI 助手</h3>
               <p style={{ color: 'rgba(232,224,208,0.4)', fontSize: '14px', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>
                 基于 DeepSeek 大模型，内置三国历史知识库。<br />
                 可以回答关于人物、事件、战役、地理、著作等问题。<br />
